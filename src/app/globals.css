@@ -1,0 +1,29 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    color-scheme: light;
+  }
+
+  html {
+    scroll-behavior: smooth;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    /* Dark root so nothing white can flash above the fold (the home hero and
+       any overscroll sit on this); the light marketing content below the fold
+       supplies its own white/slate section backgrounds. */
+    background-color: #05070d;
+  }
+
+  body {
+    @apply bg-white text-slate-700;
+  }
+}
+
+@layer components {
+  .container-page {
+    @apply mx-auto w-full max-w-content px-6 sm:px-8;
+  }
+}
