@@ -1,12 +1,13 @@
 import React, { useEffect, useRef } from 'react';
 import * as THREE from 'three';
 
-// Cinematic hero: an oval "donut" (torus) built from a stack of individual ring
-// loops, floating in a dark, foggy, star-flecked void. Each ring slowly twists
-// about the donut's local axis with a phase offset between neighbours, so a wave
-// of the form turning itself inside-out travels around the loop while the whole
-// group rotates gently. On first load it spins up, then eases into a slow idle
-// as the SEVYNDAY wordmark materializes from its core. Drag to rotate.
+// Cinematic hero: a wireframe sphere woven from great-circle meridians — every
+// loop passes through the same two poles, evenly rotated around the polar axis —
+// floating in a dark, foggy, star-flecked void. At rest the poles sit on a
+// diagonal so the characteristic lens-shaped gap of empty space opens through
+// the middle, with individual translucent oval loops bundled on each side. On
+// first load it spins up, then eases into a slow idle as the SEVYNDAY wordmark
+// materializes from its core. Drag to rotate.
 //
 // Module-scoped so the intro sequence plays only ONCE per page load — a remount
 // (route change back to home, or React StrictMode's dev double-invoke) skips
@@ -88,15 +89,18 @@ export default function SevynDaySphere() {
     const stars = new THREE.Points(starGeometry, starMaterial);
     scene.add(stars);
 
-    // --- The oval donut, built from individual ring loops ---------------------
+    // --- The sphere, woven from great-circle meridians ------------------------
+    // `tilt` holds the resting orientation (and drag); `group` spins the
+    // meridians around the polar axis. Separating them keeps the oval stretch
+    // (which is symmetric about the polar axis) spinning cleanly with no wobble.
+    const tilt = new THREE.Group();
+    scene.add(tilt);
     const group = new THREE.Group();
-    scene.add(group);
+    tilt.add(group);
 
-    const RING_COUNT = 30; // rings swept around the main donut path
-    const MAIN_RADIUS = 1.7; // center -> tube-center distance
-    const TUBE_RADIUS = 0.5; // radius of each ring (tube cross-section)
-    const X_STRETCH = 1.4; // elongate along X so it reads as an oval, not a circle
-    const RING_SEGMENTS = 72;
+    const MERIDIAN_COUNT = 20; // few enough that individual loops stay distinct
+    const RADIUS = 2;
+    const SEGMENTS = 128;
 
     // Gradient stops sampled from the reference image (blue -> purple -> pink -> orange -> yellow)
     const colorStops = [
@@ -114,66 +118,42 @@ export default function SevynDaySphere() {
       return colorStops[i].clone().lerp(colorStops[i + 1], localT);
     }
 
-    // One shared circle (a ring's cross-section) reused by every ring; each ring
-    // is a pivot placed on the oval path and oriented so the circle lies in the
-    // torus cross-section plane (spanned by the in-plane normal and the axis).
-    const ringPoints = [];
-    for (let j = 0; j <= RING_SEGMENTS; j++) {
-      const v = (2 * Math.PI * j) / RING_SEGMENTS;
-      ringPoints.push(
-        new THREE.Vector3(TUBE_RADIUS * Math.cos(v), TUBE_RADIUS * Math.sin(v), 0),
-      );
-    }
-    const ringGeometry = new THREE.BufferGeometry().setFromPoints(ringPoints);
-
-    const axis = new THREE.Vector3(0, 0, 1); // donut's central axis
-    const rings = [];
-    for (let i = 0; i < RING_COUNT; i++) {
-      const u = (2 * Math.PI * i) / RING_COUNT;
-      const cosu = Math.cos(u);
-      const sinu = Math.sin(u);
-
-      // Elliptical (oval) main path in the XY plane.
-      const cx = X_STRETCH * MAIN_RADIUS * cosu;
-      const cy = MAIN_RADIUS * sinu;
-
-      // Direction of travel along the path (its tangent) and the in-plane normal.
-      const tangent = new THREE.Vector3(
-        -X_STRETCH * MAIN_RADIUS * sinu,
-        MAIN_RADIUS * cosu,
-        0,
-      ).normalize();
-      const inPlane = new THREE.Vector3(tangent.y, -tangent.x, 0).normalize();
-      // Right-handed basis: X = in-plane normal, Y = axis, Z = X × Y.
-      const zAxis = new THREE.Vector3().crossVectors(inPlane, axis).normalize();
-      const basis = new THREE.Matrix4().makeBasis(inPlane, axis, zAxis);
-
-      const pivot = new THREE.Object3D();
-      pivot.position.set(cx, cy, 0);
-      pivot.quaternion.setFromRotationMatrix(basis);
-
+    const lines = [];
+    for (let i = 0; i < MERIDIAN_COUNT; i++) {
+      // Meridians span theta 0..PI, each a full great circle through both poles
+      // at (0, ±RADIUS, 0), evenly rotated around the polar (y) axis.
+      const theta = (Math.PI * i) / MERIDIAN_COUNT;
+      const points = [];
+      for (let j = 0; j <= SEGMENTS; j++) {
+        const t = (2 * Math.PI * j) / SEGMENTS;
+        const x = RADIUS * Math.sin(t) * Math.cos(theta);
+        const y = RADIUS * Math.cos(t);
+        const z = RADIUS * Math.sin(t) * Math.sin(theta);
+        points.push(new THREE.Vector3(x, y, z));
+      }
+      const geometry = new THREE.BufferGeometry().setFromPoints(points);
       const material = new THREE.LineBasicMaterial({
-        color: colorAt(i / (RING_COUNT - 1)),
+        color: colorAt(i / (MERIDIAN_COUNT - 1)),
         transparent: true,
-        opacity: 0.9,
+        // Slightly translucent so overlapping loops read as individual strands
+        // rather than a filled shape.
+        opacity: 0.7,
       });
-      const line = new THREE.Line(ringGeometry, material);
-      pivot.add(line);
-      group.add(pivot);
-      rings.push({ line, material });
+      const line = new THREE.Line(geometry, material);
+      group.add(line);
+      lines.push({ geometry, material });
     }
 
-    // Tilt so we look at the donut in three-quarter view (its oval hole shows).
-    group.rotation.x = 0.62;
-    group.rotation.z = 0.12;
+    // Oval stretch along the polar axis (symmetric about y → no spin wobble).
+    group.scale.set(1, 1.15, 1);
 
-    // Per-ring "turning inside out" wave: each ring twists about its local axis
-    // (rotation.y in the pivot frame = the donut's central axis), phase-offset
-    // by its position so the twist travels around the loop like a wave rather
-    // than the form spinning rigidly.
-    const TWIST_AMP = 0.85; // radians of flip per ring
-    const TWIST_SPEED = 0.00085; // radians per ms
-    const TWIST_PHASE = (2 * Math.PI) / RING_COUNT; // one wave crest around the donut
+    // Resting orientation. `tilt` sets the poles on a clear upper-left ->
+    // lower-right diagonal with the axis near the screen plane (poles toward the
+    // rim), and the initial pole-spin phase parks a meridian *gap* facing the
+    // viewer so the central lens-shaped gap of empty background reads cleanly.
+    tilt.rotation.z = 0.78;
+    tilt.rotation.x = 0.26;
+    group.rotation.y = 0.0785; // half a meridian step -> gap centered, lens open
 
     let autoRotate = true;
     let dragging = false;
@@ -195,8 +175,9 @@ export default function SevynDaySphere() {
       if (!dragging) return;
       const dx = e.clientX - prevX;
       const dy = e.clientY - prevY;
-      group.rotation.y += dx * 0.006;
-      group.rotation.x += dy * 0.006;
+      // Drag reorients the whole sphere (tilt), so the poles follow the cursor.
+      tilt.rotation.y += dx * 0.006;
+      tilt.rotation.x += dy * 0.006;
       velX = dx * 0.00025;
       velY = dy * 0.00025;
       prevX = e.clientX;
@@ -224,7 +205,7 @@ export default function SevynDaySphere() {
     const REVEAL_DELAY = 550; // let the spin get going before the wordmark forms
     const REVEAL_MS = 1200;
 
-    // progress 0 = tight, glowing, blurred cluster of light at the donut's core;
+    // progress 0 = tight, glowing, blurred cluster of light at the sphere's core;
     // progress 1 = crisp, wide, letter-spaced white text in front of it.
     function setWordmark(p) {
       if (!wordmark) return;
@@ -237,7 +218,7 @@ export default function SevynDaySphere() {
     const playIntro = !hasIntroPlayed;
     const INTRO_SPIN_MS = 1500;
     const FAST_SPEED = 0.08; // rad/frame during the opening spin
-    const IDLE_SPEED = 0.0028; // gentle resting rotation
+    const IDLE_SPEED = 0.0016; // slow resting rotation so the lens stays legible
     let introStart = null;
     let wordmarkResolved = false;
 
@@ -260,12 +241,6 @@ export default function SevynDaySphere() {
       stars.rotation.y += 0.00016;
       stars.rotation.x = Math.sin(now * 0.00004) * 0.02;
 
-      // Per-ring inside-out twist wave.
-      for (let i = 0; i < rings.length; i++) {
-        rings[i].line.rotation.y =
-          TWIST_AMP * Math.sin(now * TWIST_SPEED + i * TWIST_PHASE);
-      }
-
       const elapsed = introStart !== null ? now - introStart : Infinity;
 
       if (autoRotate) {
@@ -275,15 +250,15 @@ export default function SevynDaySphere() {
           const eased = 1 - Math.pow(1 - p, 3); // easeOutCubic
           speed = FAST_SPEED + (IDLE_SPEED - FAST_SPEED) * eased;
         }
-        group.rotation.y += speed;
+        group.rotation.y += speed; // spin meridians cleanly around the pole
       } else if (!dragging) {
-        group.rotation.y += velX;
-        group.rotation.x += velY;
+        tilt.rotation.y += velX; // orbit inertia after a drag
+        tilt.rotation.x += velY;
         velX *= 0.94;
         velY *= 0.94;
       }
 
-      // Materialize the wordmark from the donut's core as the spin settles.
+      // Materialize the wordmark from the sphere's core as the spin settles.
       if (playIntro && !wordmarkResolved) {
         const p = Math.min(Math.max((elapsed - REVEAL_DELAY) / REVEAL_MS, 0), 1);
         const eased = 1 - Math.pow(1 - p, 3); // easeOutCubic
@@ -333,8 +308,10 @@ export default function SevynDaySphere() {
       window.removeEventListener('resize', onResize);
       mount.removeChild(el);
       renderer.dispose();
-      rings.forEach(({ material }) => material.dispose());
-      ringGeometry.dispose();
+      lines.forEach(({ geometry, material }) => {
+        geometry.dispose();
+        material.dispose();
+      });
       starGeometry.dispose();
       starMaterial.dispose();
       starTexture.dispose();
