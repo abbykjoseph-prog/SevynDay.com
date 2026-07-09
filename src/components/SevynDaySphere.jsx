@@ -2,12 +2,10 @@ import React, { useEffect, useRef } from 'react';
 import * as THREE from 'three';
 
 // Cinematic hero: a wireframe sphere woven from great-circle meridians — every
-// loop passes through the same two poles, evenly rotated around the polar axis —
-// floating in a dark, foggy, star-flecked void. At rest the poles sit on a
-// diagonal so the characteristic lens-shaped gap of empty space opens through
-// the middle, with individual translucent oval loops bundled on each side. On
-// first load it spins up, then eases into a slow idle as the SEVYNDAY wordmark
-// materializes from its core. Drag to rotate.
+// loop passes through the same two poles, on the camera's view axis — floating
+// in a dark, travelling starfield. On load a staged reveal plays: the SEVYNDAY
+// letters fade in stacked and spread out, then the sphere emerges pole-on from a
+// point of light and hands off into a slow figure-eight idle sweep. Drag rotates.
 //
 // Module-scoped so the intro sequence plays only ONCE per page load — a remount
 // (route change back to home, or React StrictMode's dev double-invoke) skips
@@ -171,16 +169,18 @@ export default function SevynDaySphere() {
         points.push(new THREE.Vector3(x, y, z));
       }
       const geometry = new THREE.BufferGeometry().setFromPoints(points);
+      // Translucent, with a slight per-loop variance so some loops feel
+      // closer/brighter and others recede. baseOpacity is the settled value;
+      // the intro fades from 0 up to it.
+      const baseOpacity = 0.5 + Math.random() * 0.35; // ~0.5–0.85
       const material = new THREE.LineBasicMaterial({
         color: colorAt(i / (MERIDIAN_COUNT - 1)),
         transparent: true,
-        // Translucent, with a slight per-loop variance so some loops feel
-        // closer/brighter and others recede — adds depth to the sphere itself.
-        opacity: 0.5 + Math.random() * 0.35, // ~0.5–0.85
+        opacity: baseOpacity,
       });
       const line = new THREE.Line(geometry, material);
       group.add(line);
-      lines.push({ geometry, material });
+      lines.push({ geometry, material, baseOpacity });
     }
 
     // Slight oval stretch (transverse to the pole axis) so the radiating
@@ -204,7 +204,6 @@ export default function SevynDaySphere() {
     const fig = { ampX: 0.79, ampY: 0.2, speed: 0.0035, boost: 1.85, time: Math.PI / 2 };
     let baseYaw = 0;
     let basePitch = 0;
-    let spinZ = 0; // intro spin-up around the pole (view) axis
 
     let autoRotate = true; // figure-eight advancing (idle)
     let dragging = false;
@@ -249,37 +248,90 @@ export default function SevynDaySphere() {
     window.addEventListener('pointermove', onPointerMove);
     window.addEventListener('pointerup', onPointerUp);
 
-    // --- Intro sequence (once per page load) ----------------------------------
-    // Driven entirely from the animation loop against the frame clock — no
-    // setTimeout and no CSS transition — so it is immune to React re-render
-    // reverts and to timer throttling, and stays in sync with the spin.
-    const wordmark = wordmarkRef.current;
-    const REVEAL_DELAY = 550; // let the spin get going before the wordmark forms
-    const REVEAL_MS = 1200;
+    // --- Intro reveal (once per page load) ------------------------------------
+    // One staged sequence, driven off the frame clock so it stays in sync and
+    // survives React re-renders / timer throttling:
+    //   1) letters fade in stacked at centre         (0    -> 600ms)
+    //   2) letters spread out to the wordmark         (600  -> ~1400ms)
+    //   3) sphere emerges: pole-on, scales from a     (900  -> 2100ms)
+    //      point of light + fades in (loops grow out)
+    //   4) handoff: ease into the figure-eight idle   (2100 -> 2600ms)
+    const playIntro = !hasIntroPlayed;
+    // Mark the intro played on a *later* frame rather than synchronously, so
+    // React StrictMode's mount → cleanup → remount (dev) doesn't set the flag
+    // during the throwaway first mount and skip the visible play. A real
+    // remount (route return) happens after this fires, so it still skips there.
+    let introFlagRaf = requestAnimationFrame(() => {
+      hasIntroPlayed = true;
+    });
 
-    // progress 0 = tight, glowing, blurred cluster of light at the sphere's core;
-    // progress 1 = crisp, wide, letter-spaced white text in front of it.
-    function setWordmark(p) {
-      if (!wordmark) return;
-      wordmark.style.opacity = String(p);
-      wordmark.style.transform = `scale(${(1.15 - 0.15 * p).toFixed(4)})`;
-      wordmark.style.filter = `blur(${(16 * (1 - p)).toFixed(2)}px)`;
-      wordmark.style.letterSpacing = `${(0.04 + 0.31 * p).toFixed(4)}em`;
+    const S1_FADE_MS = 600; // stage 1: opacity fade while stacked
+    const S2_START = 600; // stage 2: letters begin spreading
+    const S2_DUR = 620; // base per-letter spread duration
+    const S2_STAGGER = 150; // extra start delay for the outermost letters
+    const S2_FAR_DUR = 140; // extra duration for the outermost letters
+    const S3_START = 900; // stage 3: sphere begins emerging
+    const S3_DUR = 1200;
+    const S4_START = S3_START + S3_DUR; // 2100: handoff into idle
+    const S4_DUR = 500;
+    const EMERGE_SCALE = 0.05; // starting group scale — a near-point of light
+    const easeOut = (x) => 1 - Math.pow(1 - Math.min(Math.max(x, 0), 1), 3);
+
+    // Measure each letter's final offset from the wordmark centre, then give the
+    // outermost letters a slightly later start and longer travel so the spread
+    // reads organic rather than mechanical.
+    const letters = [];
+    if (wordmarkRef.current) {
+      const spans = Array.from(wordmarkRef.current.querySelectorAll('[data-letter]'));
+      // Clear any prior imperative transform (e.g. a previous StrictMode mount
+      // left the letters stacked) so we measure the true final layout.
+      spans.forEach((s) => (s.style.transform = 'none'));
+      const wmRect = wordmarkRef.current.getBoundingClientRect();
+      const wmCentre = wmRect.left + wmRect.width / 2;
+      let maxOff = 1;
+      const raw = spans.map((elm) => {
+        const r = elm.getBoundingClientRect();
+        return { el: elm, offsetX: r.left + r.width / 2 - wmCentre };
+      });
+      raw.forEach((L) => (maxOff = Math.max(maxOff, Math.abs(L.offsetX))));
+      raw.forEach((L) => {
+        const nd = Math.abs(L.offsetX) / maxOff; // 0 at centre, 1 at the edges
+        letters.push({
+          el: L.el,
+          offsetX: L.offsetX,
+          delay: nd * S2_STAGGER,
+          dur: S2_DUR + nd * S2_FAR_DUR,
+        });
+      });
     }
 
-    const playIntro = !hasIntroPlayed;
-    const INTRO_SPIN_MS = 1500;
-    const FAST_SPEED = 0.08; // rad/frame: opening spin-up around the pole axis
-    let introStart = null;
-    let wordmarkResolved = false;
+    // Stage 1+2: letters fade in stacked at centre, then slide to final slots.
+    function applyLetters(t) {
+      const fade = easeOut(t / S1_FADE_MS);
+      for (const L of letters) {
+        const spread = easeOut((t - S2_START - L.delay) / L.dur);
+        L.el.style.opacity = String(fade);
+        L.el.style.transform = `translateX(${(-L.offsetX * (1 - spread)).toFixed(2)}px)`;
+      }
+    }
 
+    // Stage 3: sphere grows from a point of light (scale) and fades in (opacity).
+    function applySphere(t) {
+      const p = easeOut((t - S3_START) / S3_DUR);
+      const s = EMERGE_SCALE + (1 - EMERGE_SCALE) * p;
+      group.scale.set(s, s * 1.15, s);
+      for (const L of lines) L.material.opacity = L.baseOpacity * p;
+    }
+
+    let introStart = null;
+    let introLocked = false;
     if (playIntro) {
-      hasIntroPlayed = true;
-      setWordmark(0); // begin as the unresolved cluster
+      applyLetters(0); // hidden, stacked
+      applySphere(0); // a near-invisible point
     } else {
-      // Remount (StrictMode / route return): skip straight to the settled state.
-      setWordmark(1);
-      wordmarkResolved = true;
+      // Remount (StrictMode / route return): jump straight to the settled state.
+      applyLetters(1e6);
+      applySphere(1e6);
     }
 
     let frameId;
@@ -309,26 +361,31 @@ export default function SevynDaySphere() {
         layer.geo.attributes.position.needsUpdate = true;
       }
 
-      const elapsed = introStart !== null ? now - introStart : Infinity;
-      const introSpinning = playIntro && elapsed < INTRO_SPIN_MS;
+      const seqT = playIntro ? now - introStart : 1e6;
 
-      // Intro: spin the starburst around its pole (view) axis, easing to a stop.
-      // This leaves the pole dead-centre while the wordmark materializes.
-      if (introSpinning) {
-        const p = elapsed / INTRO_SPIN_MS;
-        const eased = 1 - Math.pow(1 - p, 3); // easeOutCubic
-        spinZ += FAST_SPEED * (1 - eased);
+      // Stages 1-3: drive the letters and the sphere emerge. Clamp to S4_START
+      // so the final frame locks exactly at the settled state, then stop.
+      // Drive the letters + sphere emerge until the sequence locks at the
+      // settled state. Clamp to S4_START so even a first frame that arrives late
+      // (e.g. a backgrounded tab during load) snaps to the full settled state
+      // rather than leaving the hero hidden.
+      if (playIntro && !introLocked) {
+        const st = Math.min(seqT, S4_START);
+        applyLetters(st);
+        applySphere(st);
+        if (seqT >= S4_START) introLocked = true;
       }
 
-      // Advance the figure-eight only once the intro spin is done and the sweep
-      // is active (paused while dragging and during the post-release hold).
-      if (!introSpinning && autoRotate && !dragging) {
-        // Slow (25%) through the side-on extremes, quicker through the centre
-        // crossing where the poles overlap. |cos(time)| is 1 at the extremes and
-        // 0 at the crossing, so nearCentre ramps 0 -> 1 approaching centre.
+      // Stage 4+: figure-eight idle, eased in over the handoff window so it
+      // departs the pole-on emerge orientation smoothly rather than snapping.
+      // During stages 1-3 fig.time is held at PI/2 → rotation (0,0,0), pole-on.
+      const handoff = playIntro ? easeOut((seqT - S4_START) / S4_DUR) : 1;
+      if (seqT >= S4_START && autoRotate && !dragging) {
+        // Slow through the side-on extremes, quicker through the centre crossing
+        // where the poles overlap.
         const nearCentre = 1 - Math.abs(Math.cos(fig.time));
-        fig.time += fig.speed * (1 + fig.boost * nearCentre * nearCentre);
-      } else if (!introSpinning && !dragging) {
+        fig.time += fig.speed * (1 + fig.boost * nearCentre * nearCentre) * handoff;
+      } else if (seqT >= S4_START && !dragging) {
         // Inertia carries the dragged base for a beat, then settles.
         baseYaw += velX;
         basePitch += velY;
@@ -337,17 +394,9 @@ export default function SevynDaySphere() {
       }
 
       // Figure-eight: yaw = A·cos(t), pitch = B·sin(2t) → horizontal infinity.
-      group.rotation.z = spinZ;
+      group.rotation.z = 0;
       group.rotation.y = baseYaw + fig.ampX * Math.cos(fig.time);
       group.rotation.x = basePitch + fig.ampY * Math.sin(2 * fig.time);
-
-      // Materialize the wordmark from the sphere's core as the spin settles.
-      if (playIntro && !wordmarkResolved) {
-        const p = Math.min(Math.max((elapsed - REVEAL_DELAY) / REVEAL_MS, 0), 1);
-        const eased = 1 - Math.pow(1 - p, 3); // easeOutCubic
-        setWordmark(eased);
-        if (p >= 1) wordmarkResolved = true;
-      }
 
       renderer.render(scene, camera);
     }
@@ -383,6 +432,7 @@ export default function SevynDaySphere() {
     return () => {
       cancelAnimationFrame(frameId);
       cancelAnimationFrame(initialSizeRaf);
+      cancelAnimationFrame(introFlagRaf);
       clearTimeout(idleTimeout);
       resizeObserver.disconnect();
       el.removeEventListener('pointerdown', onPointerDown);
@@ -407,23 +457,33 @@ export default function SevynDaySphere() {
         className="absolute inset-0 cursor-grab active:cursor-grabbing"
       />
       {/* Wordmark overlay — non-interactive so drags pass through to the canvas.
-          Its animated state is driven imperatively from the effect above. */}
+          Rendered as individual letter spans; the intro (in the effect above)
+          fades them in stacked at centre, then spreads them to these slots. */}
       <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
         <h1
           ref={wordmarkRef}
-          // Starts hidden via the class (no flash before the effect runs). The
-          // animated props — opacity, transform, filter, letter-spacing — are
-          // set imperatively from the frame loop and are never in this JSX
-          // style prop, so a React re-render can't revert them.
-          className="select-none text-center font-semibold text-white opacity-0"
+          aria-label="SEVYNDAY"
+          className="inline-flex select-none items-baseline font-semibold text-white"
           style={{
             fontSize: 'clamp(2.5rem, 8vw, 6rem)',
-            textIndent: '0.35em', // balance the trailing letter-spacing when centered
+            gap: '0.3em',
             textShadow:
               '0 0 24px rgba(120,160,255,0.55), 0 0 52px rgba(90,130,255,0.4), 0 2px 12px rgba(255,255,255,0.25)',
           }}
         >
-          SEVYNDAY
+          {'SEVYNDAY'.split('').map((ch, i) => (
+            <span
+              key={i}
+              data-letter
+              aria-hidden="true"
+              // Starts hidden; the effect drives opacity + translateX. Never set
+              // here after mount, so a React re-render can't revert them.
+              className="inline-block opacity-0"
+              style={{ willChange: 'transform, opacity' }}
+            >
+              {ch}
+            </span>
+          ))}
         </h1>
       </div>
     </div>
