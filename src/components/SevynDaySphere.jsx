@@ -199,11 +199,11 @@ export default function SevynDaySphere() {
     // most of the width (the sphere's projected diameter is the hard ceiling —
     // it can't reach past the text edges). `time` starts at PI/2 so yaw/pitch
     // are both 0 and the pole begins dead-centre.
-    // `speed` is the slow baseline; `boost` accelerates the sweep through the
-    // centre crossing where the two convergence poles overlap. speed·(1+boost)
-    // ≈ 0.01 keeps the centre burst the same while the slow part runs a touch
-    // quicker than before.
-    const fig = { ampX: 0.79, ampY: 0.2, speed: 0.0035, boost: 1.85, time: Math.PI / 2 };
+    // `time` is a LINEAR clock advancing at `speed`; the phase fed into cos/sin
+    // is warped by `warp` (phase = time - warp·sin(2·time)) so angular progress
+    // is fast through the centre crossings and slow at the outer turns —
+    // exaggerating the momentum without changing the loop's shape or duration.
+    const fig = { ampX: 0.79, ampY: 0.2, speed: 0.005, warp: 0.35, time: Math.PI / 2 };
     let baseYaw = 0;
     let basePitch = 0;
 
@@ -269,7 +269,7 @@ export default function SevynDaySphere() {
     });
 
     const S1_FADE_MS = 1600; // stage 1: solo "7" fades in slowly
-    const S1_HOLD_MS = 300; // brief hold on just the 7 once visible
+    const S1_HOLD_MS = 150; // brief hold on just the 7 once visible
     const S2_START = S1_FADE_MS + S1_HOLD_MS; // 2100: letters begin fanning out
     const S2_DUR = 1200; // base per-letter spread duration (~2x prior)
     const S2_STAGGER = 300; // extra start delay for the outermost letters
@@ -406,10 +406,8 @@ export default function SevynDaySphere() {
       // During stages 1-3 fig.time is held at PI/2 → rotation (0,0,0), pole-on.
       const handoff = playIntro ? easeOut((seqT - S4_START) / S4_DUR) : 1;
       if (seqT >= S4_START && autoRotate && !dragging) {
-        // Slow through the side-on extremes, quicker through the centre crossing
-        // where the poles overlap.
-        const nearCentre = 1 - Math.abs(Math.cos(fig.time));
-        fig.time += fig.speed * (1 + fig.boost * nearCentre * nearCentre) * handoff;
+        // Advance the linear clock; the phase warp below concentrates the speed.
+        fig.time += fig.speed * handoff;
       } else if (seqT >= S4_START && !dragging) {
         // Inertia carries the dragged base for a beat, then settles.
         baseYaw += velX;
@@ -418,10 +416,14 @@ export default function SevynDaySphere() {
         velY *= 0.94;
       }
 
-      // Figure-eight: yaw = A·cos(t), pitch = B·sin(2t) → horizontal infinity.
+      // Figure-eight: yaw = A·cos(phase), pitch = B·sin(2·phase) → horizontal
+      // infinity. `phase` is the linear clock eased so d(phase)/d(time) peaks at
+      // the centre crossings and dips at the turns (fast through the middle of
+      // each pass, decelerating into each turnaround) — visible momentum.
+      const phase = fig.time - fig.warp * Math.sin(2 * fig.time);
       group.rotation.z = 0;
-      group.rotation.y = baseYaw + fig.ampX * Math.cos(fig.time);
-      group.rotation.x = basePitch + fig.ampY * Math.sin(2 * fig.time);
+      group.rotation.y = baseYaw + fig.ampX * Math.cos(phase);
+      group.rotation.x = basePitch + fig.ampY * Math.sin(2 * phase);
 
       renderer.render(scene, camera);
     }
