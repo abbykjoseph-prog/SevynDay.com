@@ -3,9 +3,10 @@ import * as THREE from 'three';
 
 // Cinematic hero: a wireframe sphere woven from great-circle meridians — every
 // loop passes through the same two poles, on the camera's view axis — floating
-// in a dark, travelling starfield. On load a staged reveal plays: the SEVYNDAY
-// letters fade in stacked and spread out, then the sphere emerges pole-on from a
-// point of light and hands off into a slow figure-eight idle sweep. Drag rotates.
+// in a dark, travelling starfield. On load a staged reveal plays: a solo "7"
+// fades in and holds, the SEVYNDAY letters fan out from behind it, then the
+// sphere emerges pole-on from a point of light and hands off into a slow
+// figure-eight idle sweep. Drag rotates.
 //
 // Module-scoped so the intro sequence plays only ONCE per page load — a remount
 // (route change back to home, or React StrictMode's dev double-invoke) skips
@@ -17,6 +18,7 @@ const SCENE_COLOR = '#05070D';
 export default function SevynDaySphere() {
   const mountRef = useRef(null);
   const wordmarkRef = useRef(null);
+  const sevenRef = useRef(null);
 
   useEffect(() => {
     const mount = mountRef.current;
@@ -251,11 +253,12 @@ export default function SevynDaySphere() {
     // --- Intro reveal (once per page load) ------------------------------------
     // One staged sequence, driven off the frame clock so it stays in sync and
     // survives React re-renders / timer throttling:
-    //   1) letters fade in stacked at centre         (0    -> 600ms)
-    //   2) letters spread out to the wordmark         (600  -> ~1400ms)
-    //   3) sphere emerges: pole-on, scales from a     (900  -> 2100ms)
+    //   1) a solo "7" fades in slowly, then holds       (0    -> 2100ms)
+    //   2) the letters fan out from behind the 7 as it   (2100 -> ~3860ms)
+    //      fades away, assembling the wordmark
+    //   3) sphere emerges: pole-on, scales from a        (2900 -> 5300ms)
     //      point of light + fades in (loops grow out)
-    //   4) handoff: ease into the figure-eight idle   (2100 -> 2600ms)
+    //   4) handoff: ease into the figure-eight idle      (5300 -> 5800ms)
     const playIntro = !hasIntroPlayed;
     // Mark the intro played on a *later* frame rather than synchronously, so
     // React StrictMode's mount → cleanup → remount (dev) doesn't set the flag
@@ -265,14 +268,16 @@ export default function SevynDaySphere() {
       hasIntroPlayed = true;
     });
 
-    const S1_FADE_MS = 600; // stage 1: opacity fade while stacked
-    const S2_START = 600; // stage 2: letters begin spreading
-    const S2_DUR = 620; // base per-letter spread duration
-    const S2_STAGGER = 150; // extra start delay for the outermost letters
-    const S2_FAR_DUR = 140; // extra duration for the outermost letters
-    const S3_START = 900; // stage 3: sphere begins emerging
-    const S3_DUR = 1200;
-    const S4_START = S3_START + S3_DUR; // 2100: handoff into idle
+    const S1_FADE_MS = 1600; // stage 1: solo "7" fades in slowly
+    const S1_HOLD_MS = 300; // brief hold on just the 7 once visible
+    const S2_START = S1_FADE_MS + S1_HOLD_MS; // 2100: letters begin fanning out
+    const S2_DUR = 1200; // base per-letter spread duration (~2x prior)
+    const S2_STAGGER = 300; // extra start delay for the outermost letters
+    const S2_FAR_DUR = 260; // extra duration for the outermost letters
+    const SEVEN_FADE_MS = 650; // the 7 fades out as the letters take over
+    const S3_START = 2900; // stage 3: sphere begins emerging (overlaps stage 2)
+    const S3_DUR = 2400; // ~2x prior — slower circular emerge
+    const S4_START = S3_START + S3_DUR; // 5300: handoff into idle
     const S4_DUR = 500;
     const EMERGE_SCALE = 0.05; // starting group scale — a near-point of light
     const easeOut = (x) => 1 - Math.pow(1 - Math.min(Math.max(x, 0), 1), 3);
@@ -305,14 +310,31 @@ export default function SevynDaySphere() {
       });
     }
 
-    // Stage 1+2: letters fade in stacked at centre, then slide to final slots.
+    const sevenEl = sevenRef.current;
+
+    // Stage 2: letters stay hidden behind the 7 through stage 1 (opacity 0,
+    // stacked at centre), then fade in as they fan out to their final slots.
+    // Opacity ramps a touch faster than the travel so each letter is clearly
+    // visible on the way out rather than only at its destination.
     function applyLetters(t) {
-      const fade = easeOut(t / S1_FADE_MS);
       for (const L of letters) {
-        const spread = easeOut((t - S2_START - L.delay) / L.dur);
-        L.el.style.opacity = String(fade);
+        const rel = t - S2_START - L.delay;
+        const spread = easeOut(rel / L.dur);
+        const op = easeOut(rel / (L.dur * 0.6));
+        L.el.style.opacity = String(op);
         L.el.style.transform = `translateX(${(-L.offsetX * (1 - spread)).toFixed(2)}px)`;
       }
+    }
+
+    // Stage 1: the solo "7" fades in slowly, holds, then fades out gracefully as
+    // the letters take its place (no abrupt disappearance).
+    function applySeven(t) {
+      if (!sevenEl) return;
+      const op =
+        t < S2_START
+          ? easeOut(t / S1_FADE_MS) // fade in (clamps to 1 through the hold)
+          : 1 - easeOut((t - S2_START) / SEVEN_FADE_MS); // fade out
+      sevenEl.style.opacity = String(Math.max(0, op));
     }
 
     // Stage 3: sphere grows from a point of light (scale) and fades in (opacity).
@@ -326,10 +348,12 @@ export default function SevynDaySphere() {
     let introStart = null;
     let introLocked = false;
     if (playIntro) {
-      applyLetters(0); // hidden, stacked
+      applySeven(0); // begins invisible, fades in first
+      applyLetters(0); // hidden, stacked behind the 7
       applySphere(0); // a near-invisible point
     } else {
       // Remount (StrictMode / route return): jump straight to the settled state.
+      applySeven(1e6); // 7 gone
       applyLetters(1e6);
       applySphere(1e6);
     }
@@ -371,6 +395,7 @@ export default function SevynDaySphere() {
       // rather than leaving the hero hidden.
       if (playIntro && !introLocked) {
         const st = Math.min(seqT, S4_START);
+        applySeven(st);
         applyLetters(st);
         applySphere(st);
         if (seqT >= S4_START) introLocked = true;
@@ -457,34 +482,52 @@ export default function SevynDaySphere() {
         className="absolute inset-0 cursor-grab active:cursor-grabbing"
       />
       {/* Wordmark overlay — non-interactive so drags pass through to the canvas.
-          Rendered as individual letter spans; the intro (in the effect above)
-          fades them in stacked at centre, then spreads them to these slots. */}
+          The intro reveals a solo "7" first, then fans the letter spans out from
+          behind it (both driven imperatively from the effect above). */}
       <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-        <h1
-          ref={wordmarkRef}
-          aria-label="SEVYNDAY"
-          className="inline-flex select-none items-baseline font-semibold text-white"
-          style={{
-            fontSize: 'clamp(2.5rem, 8vw, 6rem)',
-            gap: '0.3em',
-            textShadow:
-              '0 0 24px rgba(120,160,255,0.55), 0 0 52px rgba(90,130,255,0.4), 0 2px 12px rgba(255,255,255,0.25)',
-          }}
-        >
-          {'SEVYNDAY'.split('').map((ch, i) => (
-            <span
-              key={i}
-              data-letter
-              aria-hidden="true"
-              // Starts hidden; the effect drives opacity + translateX. Never set
-              // here after mount, so a React re-render can't revert them.
-              className="inline-block opacity-0"
-              style={{ willChange: 'transform, opacity' }}
-            >
-              {ch}
-            </span>
-          ))}
-        </h1>
+        <div className="relative">
+          <h1
+            ref={wordmarkRef}
+            aria-label="SEVYNDAY"
+            className="inline-flex select-none items-baseline font-semibold text-white"
+            style={{
+              fontSize: 'clamp(2.5rem, 8vw, 6rem)',
+              gap: '0.3em',
+              textShadow:
+                '0 0 24px rgba(120,160,255,0.55), 0 0 52px rgba(90,130,255,0.4), 0 2px 12px rgba(255,255,255,0.25)',
+            }}
+          >
+            {'SEVYNDAY'.split('').map((ch, i) => (
+              <span
+                key={i}
+                data-letter
+                aria-hidden="true"
+                // Starts hidden; the effect drives opacity + translateX. Never
+                // set here after mount, so a React re-render can't revert them.
+                className="inline-block opacity-0"
+                style={{ willChange: 'transform, opacity' }}
+              >
+                {ch}
+              </span>
+            ))}
+          </h1>
+          {/* Solo "7" — same font/colour/glow, centred over the wordmark box and
+              stacked above the letters. Fades in first, then out (effect-driven). */}
+          <span
+            ref={sevenRef}
+            aria-hidden="true"
+            className="absolute inset-0 z-10 flex select-none items-center justify-center font-semibold text-white"
+            style={{
+              fontSize: 'clamp(2.5rem, 8vw, 6rem)',
+              opacity: 0,
+              willChange: 'opacity',
+              textShadow:
+                '0 0 24px rgba(120,160,255,0.55), 0 0 52px rgba(90,130,255,0.4), 0 2px 12px rgba(255,255,255,0.25)',
+            }}
+          >
+            7
+          </span>
+        </div>
       </div>
     </div>
   );
