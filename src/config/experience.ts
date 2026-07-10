@@ -195,14 +195,14 @@ export const SCENES: SceneDef[] = [
 // Keep these ordered and non-overlapping. Content `range`s above should sit
 // inside the matching hold so copy shows while the shape is settled.
 export const HOLD_ZONES: Record<SceneId, [number, number]> = {
-  sphere: [0.0, 0.09],
-  funnel: [0.15, 0.18],
-  helix: [0.255, 0.345],
-  starfield: [0.4, 0.46],
-  terrain: [0.515, 0.635],
-  well: [0.69, 0.73],
-  flash: [0.8, 0.82],
-  orbital: [0.875, 1.0],
+  sphere: [0.0, 0.055],
+  funnel: [0.155, 0.175],
+  helix: [0.27, 0.33],
+  starfield: [0.42, 0.45],
+  terrain: [0.545, 0.61],
+  well: [0.7, 0.72],
+  flash: [0.805, 0.815],
+  orbital: [0.905, 1.0],
 };
 
 // Convenience lookups.

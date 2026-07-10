@@ -84,6 +84,7 @@ export function ParticleField({ count, sizeBase = 16 }: ParticleFieldProps) {
   const pointsRef = useRef<THREE.Points>(null);
   const scroll = useScroll();
   const lastFrom = useRef(-1);
+  const lastTo = useRef(-1);
   const starPhase = useRef(0);
 
   const buffers = useMemo(
@@ -91,21 +92,38 @@ export function ParticleField({ count, sizeBase = 16 }: ParticleFieldProps) {
     [count],
   );
 
+  // One persistent BufferAttribute per shape, created ONCE. Reusing these exact
+  // objects when the active shapes change lets three keep every buffer
+  // GPU-resident and skip re-uploading. The old code allocated four fresh
+  // attributes (~600k floats) on every scene boundary and re-uploaded them,
+  // hitching precisely at the transitions.
+  const shapeAttrs = useMemo(
+    () =>
+      buffers.shapes.map((s) => ({
+        pos: new THREE.BufferAttribute(s.positions, 3),
+        col: new THREE.BufferAttribute(s.colors, 3),
+      })),
+    [buffers],
+  );
+
   const geometry = useMemo(() => {
     const g = new THREE.BufferGeometry();
-    const s0 = buffers.shapes[0];
-    const s1 = buffers.shapes[1] ?? buffers.shapes[0];
-    g.setAttribute("aPositionFrom", new THREE.BufferAttribute(s0.positions, 3));
-    g.setAttribute("aPositionTo", new THREE.BufferAttribute(s1.positions, 3));
-    g.setAttribute("aColorFrom", new THREE.BufferAttribute(s0.colors, 3));
-    g.setAttribute("aColorTo", new THREE.BufferAttribute(s1.colors, 3));
+    const a0 = shapeAttrs[0];
+    const a1 = shapeAttrs[1] ?? shapeAttrs[0];
+    g.setAttribute("aPositionFrom", a0.pos);
+    g.setAttribute("aPositionTo", a1.pos);
+    g.setAttribute("aColorFrom", a0.col);
+    g.setAttribute("aColorTo", a1.col);
     g.setAttribute("aSize", new THREE.BufferAttribute(buffers.size, 1));
     g.setAttribute("aSeed", new THREE.BufferAttribute(buffers.seed, 1));
     // `position` is required by three even though the shader ignores it.
-    g.setAttribute("position", new THREE.BufferAttribute(s0.positions, 3));
+    g.setAttribute(
+      "position",
+      new THREE.BufferAttribute(buffers.shapes[0].positions, 3),
+    );
     g.boundingSphere = new THREE.Sphere(new THREE.Vector3(), 12);
     return g;
-  }, [buffers]);
+  }, [shapeAttrs, buffers]);
 
   const material = useMemo(() => {
     return new THREE.ShaderMaterial({
@@ -146,27 +164,18 @@ export function ParticleField({ count, sizeBase = 16 }: ParticleFieldProps) {
     const p = clamp01(scroll.offset);
     const seg = resolveSegment(p);
 
-    // Swap the active from/to shapes when we cross a keyframe boundary.
-    if (seg.from !== lastFrom.current) {
-      const from = buffers.shapes[seg.from];
-      const to = buffers.shapes[seg.to] ?? from;
-      geometry.setAttribute(
-        "aPositionFrom",
-        new THREE.BufferAttribute(from.positions, 3),
-      );
-      geometry.setAttribute(
-        "aPositionTo",
-        new THREE.BufferAttribute(to.positions, 3),
-      );
-      geometry.setAttribute(
-        "aColorFrom",
-        new THREE.BufferAttribute(from.colors, 3),
-      );
-      geometry.setAttribute(
-        "aColorTo",
-        new THREE.BufferAttribute(to.colors, 3),
-      );
+    // Rebind the active from/to shapes when the segment changes. These
+    // BufferAttribute objects are reused, so three keeps them GPU-resident and
+    // does NOT re-upload — no hitch at the transition.
+    if (seg.from !== lastFrom.current || seg.to !== lastTo.current) {
+      const fromA = shapeAttrs[seg.from];
+      const toA = shapeAttrs[seg.to] ?? fromA;
+      geometry.setAttribute("aPositionFrom", fromA.pos);
+      geometry.setAttribute("aPositionTo", toA.pos);
+      geometry.setAttribute("aColorFrom", fromA.col);
+      geometry.setAttribute("aColorTo", toA.col);
       lastFrom.current = seg.from;
+      lastTo.current = seg.to;
     }
 
     const u = material.uniforms;
