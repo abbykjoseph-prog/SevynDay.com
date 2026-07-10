@@ -27,7 +27,14 @@ function Buttons({
 }) {
   if (!buttons) return null;
   return (
-    <div className="mt-9 flex flex-wrap gap-3">
+    // Click-through by default; Experience re-enables pointer events on this
+    // wrapper only while the scene is on screen, so the wheel reaches the
+    // scroll controller everywhere except directly over a live button.
+    <div
+      data-cta
+      className="mt-9 flex flex-wrap gap-3"
+      style={{ pointerEvents: "none" }}
+    >
       {buttons.map((b) =>
         b.variant === "primary" ? (
           <Link

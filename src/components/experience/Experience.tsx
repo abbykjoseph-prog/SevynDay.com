@@ -101,7 +101,11 @@ export function Experience({ isMobile }: ExperienceProps) {
       const fade = smoothstep(Math.min(fadeIn, fadeOut));
       el.style.opacity = String(fade);
       el.style.transform = `translateY(${(1 - fade) * 22}px)`;
-      el.style.pointerEvents = fade > 0.6 ? "auto" : "none";
+      // The block itself stays click-through (inherits pointer-events:none from
+      // the overlay root) so the wheel reaches the scroll controller. Only the
+      // button wrapper becomes interactive, and only while the scene is visible.
+      const cta = el.querySelector<HTMLElement>("[data-cta]");
+      if (cta) cta.style.pointerEvents = fade > 0.6 ? "auto" : "none";
     }
 
     // The scroll hint fades out once the user leaves the hero.
