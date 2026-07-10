@@ -7,13 +7,6 @@
       "runtimeArgs": ["run", "dev"],
       "port": 3020,
       "autoPort": true
-    },
-    {
-      "name": "sevynday-prod",
-      "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "start"],
-      "port": 3021,
-      "autoPort": true
     }
   ]
 }

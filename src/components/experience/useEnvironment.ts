@@ -31,6 +31,16 @@ export function useExperienceEnv() {
   const reducedMotion = usePrefersReducedMotion();
   const isMobile = useIsMobile();
   const [ready, setReady] = useState(false);
-  useEffect(() => setReady(true), []);
-  return { ready, reducedMotion, isMobile };
+  // `?reduced` forces the static fallback (QA + a manual escape hatch). Read
+  // after mount so it stays SSR-safe.
+  const [forceReduced, setForceReduced] = useState(false);
+  useEffect(() => {
+    setReady(true);
+    setForceReduced(/reduced/.test(window.location.search));
+  }, []);
+  return {
+    ready,
+    reducedMotion: reducedMotion || forceReduced,
+    isMobile,
+  };
 }
