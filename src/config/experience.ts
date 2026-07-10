@@ -188,6 +188,23 @@ export const SCENES: SceneDef[] = [
   },
 ];
 
+// Per-scene "hold" zones on the 0..1 offset: the particle shape stays pure
+// within its hold, and morphs happen only in the GAPS between consecutive holds.
+// Anchor scenes (sphere/helix/terrain/orbital) hold long enough for their
+// content to read; transition scenes (funnel/starfield/well/flash) hold briefly.
+// Keep these ordered and non-overlapping. Content `range`s above should sit
+// inside the matching hold so copy shows while the shape is settled.
+export const HOLD_ZONES: Record<SceneId, [number, number]> = {
+  sphere: [0.0, 0.09],
+  funnel: [0.15, 0.18],
+  helix: [0.255, 0.345],
+  starfield: [0.4, 0.46],
+  terrain: [0.515, 0.635],
+  well: [0.69, 0.73],
+  flash: [0.8, 0.82],
+  orbital: [0.875, 1.0],
+};
+
 // Convenience lookups.
 export const SCENE_BY_ID = Object.fromEntries(
   SCENES.map((s) => [s.id, s]),

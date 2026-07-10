@@ -4,10 +4,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { ScrollControls, useScroll } from "@react-three/drei";
 import { EXPERIENCE, SCENES } from "@/config/experience";
-import { clamp01, pulse } from "./math";
+import { clamp01, pulse, range01, smoothstep } from "./math";
 import { ParticleField } from "./ParticleField";
 import { CameraRig } from "./CameraRig";
 import { Effects } from "./Effects";
+import { Overlay, CONTENT_SCENES } from "./Overlay";
 
 type ExperienceProps = { isMobile: boolean };
 
@@ -50,6 +51,8 @@ function DebugBridge() {
 export function Experience({ isMobile }: ExperienceProps) {
   const hudRef = useRef<HTMLDivElement>(null);
   const flashRef = useRef<HTMLDivElement>(null);
+  const scrollHintRef = useRef<HTMLDivElement>(null);
+  const overlayRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
   const count = isMobile
     ? EXPERIENCE.particles.mobile
@@ -84,6 +87,26 @@ export function Experience({ isMobile }: ExperienceProps) {
         Math.min(1, pulse(p, range[0], range[1], peak) * 1.12),
       );
     }
+
+    // Cross-fade each anchor scene's content over its scroll range. Scenes that
+    // touch the very top/bottom hold their edge (no fade-in at 0 / fade-out at 1).
+    const m = 0.035;
+    for (const scene of CONTENT_SCENES) {
+      const el = overlayRefs.current[scene.id];
+      if (!el) continue;
+      const [a, b] = scene.range;
+      const fadeIn = a <= 0.001 ? 1 : range01(p, a, a + m);
+      const fadeOut = b >= 0.999 ? 1 : 1 - range01(p, b - m, b);
+      const fade = smoothstep(Math.min(fadeIn, fadeOut));
+      el.style.opacity = String(fade);
+      el.style.transform = `translateY(${(1 - fade) * 22}px)`;
+      el.style.pointerEvents = fade > 0.6 ? "auto" : "none";
+    }
+
+    // The scroll hint fades out once the user leaves the hero.
+    const hint = scrollHintRef.current;
+    if (hint) hint.style.opacity = String(1 - range01(p, 0.01, 0.06));
+
     const hud = hudRef.current;
     if (hud) {
       const scene =
@@ -120,6 +143,9 @@ export function Experience({ isMobile }: ExperienceProps) {
         </ScrollControls>
       </Canvas>
 
+      {/* HTML content overlays for the anchor scenes. */}
+      <Overlay blockRefs={overlayRefs} />
+
       {/* Fullscreen white-flash blowout (scene 7). Additive-feeling via bloom +
           this plane; opacity driven per frame from the scroll offset. */}
       <div
@@ -139,8 +165,11 @@ export function Experience({ isMobile }: ExperienceProps) {
         </div>
       )}
 
-      {/* Scroll affordance (fades handled later with overlays) */}
-      <div className="pointer-events-none fixed bottom-6 left-1/2 z-[54] -translate-x-1/2 text-[11px] uppercase tracking-[0.3em] text-white/40">
+      {/* Scroll affordance — fades out once past the hero. */}
+      <div
+        ref={scrollHintRef}
+        className="pointer-events-none fixed bottom-6 left-1/2 z-[54] -translate-x-1/2 text-[11px] uppercase tracking-[0.3em] text-white/40"
+      >
         scroll
       </div>
     </div>

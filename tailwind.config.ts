@@ -63,6 +63,13 @@ const config: Config = {
           "Arial",
           "sans-serif",
         ],
+        display: [
+          "var(--font-display)",
+          "var(--font-inter)",
+          "ui-sans-serif",
+          "system-ui",
+          "sans-serif",
+        ],
       },
       maxWidth: {
         content: "72rem",
