@@ -8,6 +8,7 @@ import { clamp01, pulse, range01, smoothstep } from "./math";
 import { ParticleField } from "./ParticleField";
 import { CameraRig } from "./CameraRig";
 import { Effects } from "./Effects";
+import { SceneExtras } from "./SceneExtras";
 import { Overlay, CONTENT_SCENES } from "./Overlay";
 
 type ExperienceProps = { isMobile: boolean };
@@ -136,6 +137,7 @@ export function Experience({ isMobile }: ExperienceProps) {
       >
         <ScrollControls pages={EXPERIENCE.pages} damping={EXPERIENCE.damping}>
           <ParticleField count={count} sizeBase={isMobile ? 20 : 16} />
+          <SceneExtras />
           <CameraRig />
           <FrameBridge onFrame={handleFrame} />
           {debug && <DebugBridge />}
