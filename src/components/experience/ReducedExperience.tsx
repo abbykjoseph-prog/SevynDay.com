@@ -42,6 +42,15 @@ export function ReducedExperience() {
       className="relative min-h-screen w-full text-white"
       style={{ backgroundColor: EXPERIENCE.background }}
     >
+      {/* Parked SEVYNDAY logo (top-left), matching the animated end-state — a
+          persistent site logo over the static page. */}
+      <span
+        className="fixed left-6 top-5 z-50 font-display text-xl font-bold tracking-tight text-white sm:text-2xl"
+        style={{ textShadow: "0 0 18px rgba(255,255,255,0.35)" }}
+      >
+        SEVYNDAY
+      </span>
+
       {/* Static hero */}
       <section className="relative flex min-h-[92vh] items-center overflow-hidden">
         <div
@@ -116,15 +125,7 @@ export function ReducedExperience() {
         </section>
       ))}
 
-      {/* Finale wordmark, then the normal-scrolling placeholder sections. */}
-      <section className="relative flex min-h-[52vh] items-center justify-center border-t border-white/5 px-6 text-center">
-        <span
-          className="font-display text-5xl font-bold tracking-tight text-white sm:text-7xl"
-          style={{ textShadow: "0 0 30px rgba(255,255,255,0.4)" }}
-        >
-          SEVYNDAY
-        </span>
-      </section>
+      {/* Normal-scrolling placeholder sections (SEVYNDAY is parked top-left). */}
       <PlaceholderSections />
     </div>
   );

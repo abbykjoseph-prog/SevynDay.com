@@ -453,7 +453,10 @@ export function Experience({ isMobile, reducedMotion }: ExperienceProps) {
     [introEnabled],
   );
 
-  const { wordmarkMs, panelMs } = EXPERIENCE.outro;
+  const { wordmarkMs, panelMs, parkScale, parkX, parkY } = EXPERIENCE.outro;
+  // Parked-logo transform: shrink + move SEVYNDAY's center from screen-center to
+  // (parkX, parkY) px (top-left). vw/vh keep it correct on any viewport.
+  const parkedLogo = `translate(calc(${parkX}px - 50vw), calc(${parkY}px - 50vh)) scale(${parkScale})`;
 
   return (
     <div
@@ -511,33 +514,6 @@ export function Experience({ isMobile, reducedMotion }: ExperienceProps) {
             style={{ opacity: 0, mixBlendMode: "screen" }}
           />
 
-          {/* SEVYNDAY finale wordmark. Opacity is driven per frame in scrub;
-              transform/transition are phase-driven so React never resets them. */}
-          <div
-            ref={wordmarkRef}
-            aria-hidden="true"
-            className="pointer-events-none fixed inset-0 z-[45] flex items-center justify-center will-change-transform"
-            style={{
-              opacity: phase === "outro" ? 1 : 0,
-              transform:
-                phase === "scrub" ? "translateY(0)" : "translateY(-115vh)",
-              transition:
-                phase === "outro"
-                  ? `transform ${wordmarkMs}ms cubic-bezier(0.6,0,0.75,0.1)`
-                  : undefined,
-            }}
-          >
-            <span
-              className="font-display text-6xl font-bold tracking-tight text-white sm:text-8xl"
-              style={{
-                textShadow:
-                  "0 0 22px rgba(255,255,255,0.5), 0 0 60px rgba(255,255,255,0.3), 0 0 120px rgba(255,255,255,0.15)",
-              }}
-            >
-              SEVYNDAY
-            </span>
-          </div>
-
           <div
             ref={scrollHintRef}
             className="pointer-events-none fixed bottom-6 left-1/2 z-[54] -translate-x-1/2 text-[11px] uppercase tracking-[0.3em] text-white/40"
@@ -556,6 +532,33 @@ export function Experience({ isMobile, reducedMotion }: ExperienceProps) {
         dimmed={phase === "released"}
         onStageClick={onStageClick}
       />
+
+      {/* SEVYNDAY — centered + large during the experience (opacity driven per
+          frame in scrub); on the outro it shrinks and moves to a PARKED top-left
+          site logo, and stays there over the normal content (persistent; the
+          home-nav click is wired in Phase 4). Rendered in every phase. */}
+      <div
+        ref={wordmarkRef}
+        aria-hidden="true"
+        className="pointer-events-none fixed inset-0 z-[57] flex items-center justify-center will-change-transform"
+        style={{ opacity: phase === "scrub" ? 0 : 1 }}
+      >
+        <span
+          className="font-display text-6xl font-bold tracking-tight text-white will-change-transform sm:text-8xl"
+          style={{
+            textShadow:
+              "0 0 22px rgba(255,255,255,0.5), 0 0 60px rgba(255,255,255,0.3), 0 0 120px rgba(255,255,255,0.15)",
+            transformOrigin: "center",
+            transform: phase === "scrub" ? "none" : parkedLogo,
+            transition:
+              phase === "outro"
+                ? `transform ${wordmarkMs}ms cubic-bezier(0.5,0,0.2,1)`
+                : undefined,
+          }}
+        >
+          SEVYNDAY
+        </span>
+      </div>
 
       {/* Dev-only progress HUD. */}
       {showHud && (

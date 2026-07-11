@@ -47,6 +47,18 @@ function CtaButtons({ buttons }: { buttons?: Btn[] }) {
 export function PlatformPanel() {
   return (
     <section className="relative flex min-h-[100svh] items-center justify-center px-6 text-center">
+      {/* Gradient softening: transparent at the top so the orbit shows through
+          and DISSOLVES into the panel, fading to solid #04060c by the bottom so
+          it meets the sections below with no hard edge. */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0"
+        style={{
+          background:
+            "linear-gradient(180deg, rgba(4,6,12,0) 0%, rgba(4,6,12,0) 20%, rgba(4,6,12,0.82) 62%, #04060c 100%)",
+        }}
+      />
+      {/* Radial scrim behind the copy for legibility over the orbit. */}
       <div
         aria-hidden
         className="pointer-events-none absolute inset-0"

@@ -86,6 +86,11 @@ export const EXPERIENCE = {
     wordmarkMs: 850,
     panelMs: 1000,
     bgFadeVh: 0.85,
+    // On the outro, "SEVYNDAY" shrinks + moves from center to a parked top-left
+    // site logo: `parkScale` and the parked CENTER position in px (parkX/parkY).
+    parkScale: 0.26,
+    parkX: 108,
+    parkY: 40,
   },
   /** Snap-to-section scroll: one gesture advances through ONE transition and
    *  settles on the next stage (never mid-morph). The transition still eases
@@ -216,9 +221,11 @@ export const SCENES: SceneDef[] = [
       eyebrow: "One connected ecosystem",
       heading: "A platform your whole workplace revolves around",
       sub: "Not a single tool, but a living system — connecting HR, employees, providers, and compliance around every case.",
+      // TODO_PLACEHOLDER — finale panel CTAs: copy + destinations are placeholder;
+      // linked to the on-page stub sections for now. Finalize label + href later.
       buttons: [
-        { label: "Explore the platform", href: "/product", variant: "primary" },
-        { label: "See integrations", href: "/product", variant: "ghost" },
+        { label: "Explore the platform", href: "#features", variant: "primary" },
+        { label: "See integrations", href: "#how-it-works", variant: "ghost" },
       ],
     },
   },
