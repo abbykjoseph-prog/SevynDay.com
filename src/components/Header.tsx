@@ -11,16 +11,19 @@ import { cn } from "@/lib/cn";
 
 export function Header() {
   const pathname = usePathname();
-  const isHome = pathname === "/";
+  // The cinematic experience owns `/` (and its /experience alias). The classic
+  // marketing homepage now lives at /classic and keeps the hero-reveal header.
+  const isExperience = pathname === "/" || pathname === "/experience";
+  const isClassicHome = pathname === "/classic";
   const [scrolledPastHero, setScrolledPastHero] = useState(false);
 
   useEffect(() => {
-    if (!isHome) {
+    if (!isClassicHome) {
       setScrolledPastHero(true);
       return;
     }
-    // On the home page the header stays hidden until the full-height hero has
-    // scrolled past; then it fades/slides in.
+    // On the classic homepage the header stays hidden until the full-height hero
+    // has scrolled past; then it fades/slides in.
     const onScroll = () => {
       setScrolledPastHero(window.scrollY > window.innerHeight - 80);
     };
@@ -31,22 +34,22 @@ export function Header() {
       window.removeEventListener("scroll", onScroll);
       window.removeEventListener("resize", onScroll);
     };
-  }, [isHome]);
+  }, [isClassicHome]);
 
-  // The /experience route is a full-bleed WebGL experience that owns the whole
-  // viewport (and hands off into its own footer), so the site chrome is hidden.
-  if (pathname === "/experience") return null;
+  // The experience is a full-bleed WebGL page that owns the whole viewport (and
+  // hands off into its own footer), so the site chrome is hidden there.
+  if (isExperience) return null;
 
-  // Over the home hero the header is invisible and non-interactive. On the home
-  // page it is `fixed` (out of flow) so the hero sits flush at the very top;
-  // elsewhere it is a normal sticky header.
-  const hidden = isHome && !scrolledPastHero;
+  // Over the classic hero the header is invisible and non-interactive; it is
+  // `fixed` (out of flow) so the hero sits flush at the top. Elsewhere it is a
+  // normal sticky header.
+  const hidden = isClassicHome && !scrolledPastHero;
 
   return (
     <header
       className={cn(
         "z-40 bg-white/85 backdrop-blur transition-all duration-500",
-        isHome ? "fixed inset-x-0 top-0" : "sticky top-0",
+        isClassicHome ? "fixed inset-x-0 top-0" : "sticky top-0",
         hidden
           ? "pointer-events-none -translate-y-full border-b border-transparent opacity-0"
           : "translate-y-0 border-b border-slate-200/70 opacity-100",

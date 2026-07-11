@@ -2,8 +2,11 @@
 
 A single continuous WebGL experience where **scroll position drives one persistent
 3D particle system** through eight morphing "scenes", with HTML content (headlines,
-CTAs, stat cards) layered on top. Lives at **`/experience`** on branch
-**`feature/cinematic-scroll`**. The existing homepage and components are untouched.
+CTAs, stat cards) layered on top. It is the **homepage at `/`** on branch
+**`feature/cinematic-scroll`**. The previous marketing homepage is preserved
+verbatim at **`/classic`**, and **`/experience`** is kept as a redirect to `/` so
+older shared links still work. (Earlier commits built this at `/experience`; it
+was promoted to `/` — see "Routing".)
 
 Original implementation — inspired by the "New Era" (Textura) reference for _vibe_
 (palette, particle density, motion, the white-flash climax), not its code.
@@ -14,14 +17,23 @@ Original implementation — inspired by the "New Era" (Textura) reference for _v
 
 ```bash
 npm install         # once, to pull the R3F stack (see Deps)
-npm run dev         # http://localhost:3020/experience
+npm run dev         # http://localhost:3000/
 npm run build       # production build — kept green at every commit
 ```
 
-- **`/experience`** — the animated experience (desktop & mobile).
-- **`/experience?reduced=1`** — force the reduced-motion static fallback.
-- **`/experience#debug`** — show the scroll-progress HUD and enable the
+## Routing
+
+- **`/`** — the animated experience / homepage (desktop & mobile). Site
+  Header/Footer chrome are hidden here (the experience owns the viewport).
+- **`/classic`** — the previous marketing homepage, preserved verbatim (moved
+  from the old root `app/page.tsx`). Keeps its hero-reveal header.
+- **`/experience`** — a redirect to `/` (legacy alias so shared links don't break).
+- **`/?reduced=1`** — force the reduced-motion static fallback.
+- **`/#debug`** — show the scroll-progress HUD and enable the
   `window.__exp.goto(offset)` frame-stepping helper (QA only; see below).
+
+Chrome visibility is route-driven in `Header.tsx` / `Footer.tsx` (`isExperience`
+= `/` or `/experience`; `isClassicHome` = `/classic`).
 
 > ⚠️ **Dev/build gotcha:** `next dev` and `next build` share the `.next` directory.
 > Running `npm run build` **while the dev server is live** corrupts the dev server's

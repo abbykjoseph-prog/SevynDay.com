@@ -25,8 +25,10 @@ const footerNav = [
 ];
 
 export function Footer() {
-  // The /experience route supplies its own footer inside the WebGL page.
-  if (usePathname() === "/experience") return null;
+  // The experience owns `/` (and its /experience alias) and supplies its own
+  // footer inside the WebGL page, so the site footer is hidden there.
+  const pathname = usePathname();
+  if (pathname === "/" || pathname === "/experience") return null;
 
   return (
     <footer className="border-t border-slate-200 bg-slate-50">

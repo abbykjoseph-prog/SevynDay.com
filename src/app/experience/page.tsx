@@ -1,14 +1,8 @@
-import type { Metadata } from "next";
-import { ExperienceClient } from "@/components/experience/ExperienceClient";
+import { redirect } from "next/navigation";
 
-export const metadata: Metadata = {
-  title: "Experience",
-  description:
-    "A cinematic scroll journey through SevynDay — one connected ecosystem for disability, leave, and absence management.",
-};
-
-// Server component: owns metadata only. The interactive WebGL experience is a
-// client component, dynamically imported (ssr:false) inside ExperienceClient.
-export default function ExperiencePage() {
-  return <ExperienceClient />;
+// The cinematic experience now lives at the root `/`. This route is kept as an
+// alias so any previously-shared /experience links still work — it redirects to
+// the homepage.
+export default function ExperienceRedirect() {
+  redirect("/");
 }
