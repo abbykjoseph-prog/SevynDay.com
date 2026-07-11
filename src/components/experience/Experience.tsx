@@ -143,13 +143,27 @@ function DebugBridge({ snap }: { snap: MutableRefObject<SnapState> }) {
 }
 
 export function Experience({ isMobile, reducedMotion }: ExperienceProps) {
-  const introEnabled = !reducedMotion;
+  // State persistence: the resolved END-STATE (SEVYNDAY parked, orbital settled,
+  // platform panel at the top of the normal content) is the default return
+  // point for BACK/FORWARD navigation. Only a genuine reload replays from Hero.
+  // Navigation Timing API: back_forward → start at the end-state; reload / fresh
+  // navigate → play the full experience from Hero. (Computed once, on mount.)
+  const startAtEnd = useMemo(() => {
+    if (typeof performance === "undefined") return false;
+    const nav = performance.getEntriesByType(
+      "navigation",
+    )[0] as PerformanceNavigationTiming | undefined;
+    return nav?.type === "back_forward";
+  }, []);
+  // Skip the hero load-in gather when we jump straight to the end (no replay).
+  const introEnabled = !reducedMotion && !startAtEnd;
 
   // scrub  → snap-to-section navigation (one gesture = one stage)
   // outro  → triggered, self-playing finale (SEVYNDAY parks, panel rises)
   // released → handed off to normal document scrolling
-  const [phase, setPhase] = useState<Phase>("scrub");
-  const phaseRef = useRef<Phase>("scrub");
+  const initialPhase: Phase = startAtEnd ? "released" : "scrub";
+  const [phase, setPhase] = useState<Phase>(initialPhase);
+  const phaseRef = useRef<Phase>(initialPhase);
   useEffect(() => {
     phaseRef.current = phase;
   }, [phase]);
@@ -167,11 +181,13 @@ export function Experience({ isMobile, reducedMotion }: ExperienceProps) {
   // The shared progress ref (written by SnapDriver, read by every scene).
   const progressRef = useRef(0);
   // The snap tween state — the source of truth for where we are / heading.
+  // back_forward starts settled on Orbital (the end-state); otherwise Hero.
+  const initialStage = startAtEnd ? N_STAGES - 1 : 0;
   const snap = useRef<SnapState>({
-    value: STAGE_TARGETS[0],
-    stage: 0,
-    from: STAGE_TARGETS[0],
-    to: STAGE_TARGETS[0],
+    value: STAGE_TARGETS[initialStage],
+    stage: initialStage,
+    from: STAGE_TARGETS[initialStage],
+    to: STAGE_TARGETS[initialStage],
     t: 1,
     dur: 1,
     animating: false,
@@ -234,6 +250,22 @@ export function Experience({ isMobile, reducedMotion }: ExperienceProps) {
     },
     [goToStage],
   );
+
+  // Home: the parked SEVYNDAY logo returns to the resolved end-state INSTANTLY
+  // (no replay) — snap to Orbital + release, scrolled to the top.
+  const goHome = useCallback(() => {
+    const s = snap.current;
+    s.value = STAGE_TARGETS[N_STAGES - 1];
+    s.stage = N_STAGES - 1;
+    s.from = s.value;
+    s.to = s.value;
+    s.t = 1;
+    s.animating = false;
+    window.scrollTo(0, 0);
+    if (bgRef.current) bgRef.current.style.opacity = "1";
+    setWebglActive(true);
+    setPhase("released");
+  }, []);
 
   // Clicking a progress dot navigates to that stage using the SAME smooth tween
   // as scrolling (never a hard teleport). The Orbital dot plays the whole climax.
@@ -539,12 +571,26 @@ export function Experience({ isMobile, reducedMotion }: ExperienceProps) {
           home-nav click is wired in Phase 4). Rendered in every phase. */}
       <div
         ref={wordmarkRef}
-        aria-hidden="true"
+        aria-hidden={phase !== "released"}
         className="pointer-events-none fixed inset-0 z-[57] flex items-center justify-center will-change-transform"
         style={{ opacity: phase === "scrub" ? 0 : 1 }}
       >
         <span
-          className="font-display text-6xl font-bold tracking-tight text-white will-change-transform sm:text-8xl"
+          onClick={phase === "released" ? goHome : undefined}
+          onKeyDown={
+            phase === "released"
+              ? (e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    goHome();
+                  }
+                }
+              : undefined
+          }
+          role={phase === "released" ? "button" : undefined}
+          tabIndex={phase === "released" ? 0 : undefined}
+          aria-label={phase === "released" ? "SevynDay — home" : undefined}
+          className="font-display text-6xl font-bold tracking-tight text-white outline-none will-change-transform focus-visible:ring-2 focus-visible:ring-white/60 sm:text-8xl"
           style={{
             textShadow:
               "0 0 22px rgba(255,255,255,0.5), 0 0 60px rgba(255,255,255,0.3), 0 0 120px rgba(255,255,255,0.15)",
@@ -554,6 +600,8 @@ export function Experience({ isMobile, reducedMotion }: ExperienceProps) {
               phase === "outro"
                 ? `transform ${wordmarkMs}ms cubic-bezier(0.5,0,0.2,1)`
                 : undefined,
+            pointerEvents: phase === "released" ? "auto" : "none",
+            cursor: phase === "released" ? "pointer" : "default",
           }}
         >
           SEVYNDAY
