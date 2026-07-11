@@ -102,10 +102,6 @@ export const SCENES: SceneDef[] = [
       eyebrow: "Welcome to SevynDay",
       heading: "Absence management, reimagined for the modern workplace",
       sub: "AI-assisted disability and leave case management, built for Canadian enterprises — accurate, compliant, and genuinely human.",
-      buttons: [
-        { label: "Book a demo", href: "/demo", variant: "primary" },
-        { label: "See how it works", href: "#how-it-works", variant: "ghost" },
-      ],
     },
   },
   {
@@ -130,7 +126,7 @@ export const SCENES: SceneDef[] = [
         // TODO_UNVERIFIED_STAT — placeholder marketing figure, replace once sourced.
         { value: "3×", label: "faster case resolution", unverified: true },
         // TODO_UNVERIFIED_STAT — placeholder marketing figure, replace once sourced.
-        { value: "68%", label: "lower admin load", unverified: true },
+        { value: "70%", label: "lower admin load", unverified: true },
       ],
     },
   },
@@ -154,10 +150,6 @@ export const SCENES: SceneDef[] = [
       eyebrow: "The pull of results",
       heading: "Everything revolves around one thing — your people",
       sub: "Thousands of data points, one source of truth. SevynDay turns the noise of leave, disability, and accommodation into clear, defensible decisions.",
-      buttons: [
-        { label: "Book a demo", href: "/demo", variant: "primary" },
-        { label: "Talk to us", href: "/demo", variant: "ghost" },
-      ],
     },
   },
   {

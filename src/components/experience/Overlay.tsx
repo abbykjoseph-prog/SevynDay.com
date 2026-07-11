@@ -11,9 +11,21 @@ import { SCENES, type SceneDef } from "@/config/experience";
 
 export const CONTENT_SCENES: SceneDef[] = SCENES.filter((s) => s.copy);
 
-function Pill({ children }: { children: React.ReactNode }) {
+function Pill({
+  children,
+  large = false,
+}: {
+  children: React.ReactNode;
+  large?: boolean;
+}) {
   return (
-    <span className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-3.5 py-1.5 text-[11px] font-medium uppercase tracking-[0.22em] text-white/75 backdrop-blur">
+    <span
+      className={`inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/5 font-medium uppercase text-white/75 backdrop-blur ${
+        large
+          ? "gap-2.5 px-5 py-2 text-[15px] tracking-[0.22em]"
+          : "gap-2 px-3.5 py-1.5 text-[11px] tracking-[0.22em]"
+      }`}
+    >
       <span className="h-1.5 w-1.5 rounded-full bg-[#2ea8ff] shadow-[0_0_8px_2px_rgba(46,168,255,0.7)]" />
       {children}
     </span>
@@ -82,7 +94,7 @@ function CopyBlock({ scene }: { scene: SceneDef }) {
   const isHero = scene.id === "sphere";
   return (
     <div className={copy.align === "center" ? "max-w-3xl text-center" : "max-w-2xl"}>
-      {copy.eyebrow && <Pill>{copy.eyebrow}</Pill>}
+      {copy.eyebrow && <Pill large={isHero}>{copy.eyebrow}</Pill>}
       {copy.heading && (
         <h1
           className={`mt-6 font-display font-semibold tracking-tight text-white [text-wrap:balance] ${
