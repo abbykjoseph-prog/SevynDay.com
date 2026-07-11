@@ -5,23 +5,9 @@ import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import { EXPERIENCE, SCENES } from "@/config/experience";
 import { buildParticleBuffers } from "./shapes";
-import { resolveSegment } from "./progress";
-import { easeOutCubic, lerp, windowFade } from "./math";
+import { resolveSegment, resolveSpin } from "./progress";
+import { easeOutCubic, windowFade } from "./math";
 import { useExperienceProgress } from "./progressDrive";
-
-// Per-scene spin rate (rad/s). Zero where a still frame reads better
-// (starfield, terrain). Interpolated with the same segment blend as the shapes.
-const SPIN: Record<string, number> = {
-  sphere: 0.14,
-  funnel: 0.09, // slightly faster so the funnel labels reveal a bit livelier
-  helix: 0.16,
-  starfield: 0.0,
-  terrain: 0.0,
-  well: 0.06,
-  flash: 0.04,
-  orbital: 0.11,
-};
-const SPIN_BY_INDEX = SCENES.map((s) => SPIN[s.id] ?? 0.04);
 
 const VERT = /* glsl */ `
   uniform float uTime;
@@ -234,14 +220,10 @@ export function ParticleField({
     starPhase.current += dt * 2.2 * starAmt; // only advances during flythrough
     u.uStarPhase.value = starPhase.current;
 
-    // Per-scene spin, blended across the active segment.
+    // Per-scene spin, blended across the active segment (shared with the funnel
+    // labels via resolveSpin so they orbit in lockstep).
     if (pointsRef.current) {
-      const spin = lerp(
-        SPIN_BY_INDEX[seg.from],
-        SPIN_BY_INDEX[seg.to] ?? SPIN_BY_INDEX[seg.from],
-        seg.mix,
-      );
-      pointsRef.current.rotation.y += dt * spin;
+      pointsRef.current.rotation.y += dt * resolveSpin(p);
     }
   });
 
