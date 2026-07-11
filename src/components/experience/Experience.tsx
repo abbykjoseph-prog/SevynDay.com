@@ -1,6 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type MutableRefObject,
+} from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { ScrollControls, useScroll } from "@react-three/drei";
 import {
@@ -74,6 +81,21 @@ function DebugBridge() {
   return null;
 }
 
+// Exposes drei's scroll element to the DOM layer so a progress-dot click can
+// drive a smooth native scroll to a stage. (Phase-1 free-scrub navigation; the
+// snap model replaces this in Phase 2.)
+function ScrollElCapture({
+  elRef,
+}: {
+  elRef: MutableRefObject<HTMLElement | null>;
+}) {
+  const scroll = useScroll();
+  useEffect(() => {
+    elRef.current = scroll.el;
+  }, [elRef, scroll]);
+  return null;
+}
+
 export function Experience({ isMobile, reducedMotion }: ExperienceProps) {
   const introEnabled = !reducedMotion;
 
@@ -96,6 +118,20 @@ export function Experience({ isMobile, reducedMotion }: ExperienceProps) {
   const contentRef = useRef<HTMLDivElement>(null);
   const overlayRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const latestP = useRef(0); // latest progress, read by the outro trigger
+  const scrollElRef = useRef<HTMLElement | null>(null);
+
+  // Clicking a progress dot navigates to that stage. Phase 1: a smooth native
+  // scroll of the drei scroll element (which the progress driver follows).
+  // Phase 2 replaces this with the snap controller's goToStage.
+  const onStageClick = useCallback((index: number) => {
+    const el = scrollElRef.current;
+    if (!el) return;
+    const target = PROGRESS_STAGES[index]?.at ?? 0;
+    el.scrollTo({
+      top: target * (el.scrollHeight - el.clientHeight),
+      behavior: "smooth",
+    });
+  }, []);
 
   const count = isMobile
     ? EXPERIENCE.particles.mobile
@@ -334,6 +370,7 @@ export function Experience({ isMobile, reducedMotion }: ExperienceProps) {
               <SceneExtras />
               <CameraRig />
               <FrameBridge onFrame={handleFrame} />
+              <ScrollElCapture elRef={scrollElRef} />
               {debug && <DebugBridge />}
               <Effects isMobile={isMobile} />
             </ProgressProvider>
@@ -386,15 +423,18 @@ export function Experience({ isMobile, reducedMotion }: ExperienceProps) {
           >
             scroll
           </div>
-
-          {/* Scroll-progress dots — right edge; fade out as the finale hands off. */}
-          <ProgressDots
-            blockRefs={overlayRefs}
-            isMobile={isMobile}
-            visible={phase === "scrub"}
-          />
         </>
       )}
+
+      {/* Scroll-progress dots — present throughout (clickable to jump between
+          stages / replay); smaller + dimmer once handed off to normal scroll. */}
+      <ProgressDots
+        blockRefs={overlayRefs}
+        isMobile={isMobile}
+        visible
+        dimmed={phase === "released"}
+        onStageClick={onStageClick}
+      />
 
       {/* Dev-only progress HUD. */}
       {showHud && (
