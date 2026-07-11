@@ -227,6 +227,22 @@ export const SCROLL_RESISTANCE: Record<SceneId, number> = {
   orbital: 0.7, // content — dwell on the finale copy
 };
 
+// Bespoke overlays for two transition scenes (custom layouts, not the standard
+// CopyBlock). Text lives here; layout/timing/drift live in Overlay.tsx +
+// Experience's frame loop.
+//
+// Funnel: three labels in a top-left → bottom-right stair-step that loosely wrap
+// the rotating funnel (staggered reveal + subtle parallax drift).
+export const FUNNEL_BLOCKS = [
+  "Instant Adjudication",
+  "Forensic Papertrail",
+  "Effortless Caseload",
+];
+// Starfield: one large, glowing, centered statement that fades in/out with the
+// scene.
+export const STARFIELD_STATEMENT =
+  "Every absence, accounted for. Every decision, defensible.";
+
 // Convenience lookups.
 export const SCENE_BY_ID = Object.fromEntries(
   SCENES.map((s) => [s.id, s]),

@@ -2,7 +2,12 @@
 
 import Link from "next/link";
 import type { MutableRefObject } from "react";
-import { SCENES, type SceneDef } from "@/config/experience";
+import {
+  FUNNEL_BLOCKS,
+  SCENES,
+  STARFIELD_STATEMENT,
+  type SceneDef,
+} from "@/config/experience";
 
 // The HTML content layer for the anchor scenes (sphere, helix, terrain,
 // orbital). Rendered as a fixed layer above the Canvas; each block's opacity /
@@ -125,6 +130,74 @@ function CopyBlock({ scene }: { scene: SceneDef }) {
   );
 }
 
+// Funnel scene: three labels in a top-left → bottom-right stair-step, sitting
+// close to the funnel's edges. Reveal + parallax drift are driven per frame in
+// Experience's handleFrame (keys `funnel-0..2`); positions here.
+const FUNNEL_POS = [
+  { top: "17%", left: "12%" }, // "Instant Adjudication"
+  { top: "45%", left: "39%" }, // "Forensic Papertrail"
+  { top: "71%", left: "60%" }, // "Effortless Caseload"
+];
+
+function FunnelBlocks({
+  blockRefs,
+}: {
+  blockRefs: MutableRefObject<Record<string, HTMLDivElement | null>>;
+}) {
+  return (
+    <>
+      {FUNNEL_BLOCKS.map((label, i) => (
+        <div
+          key={label}
+          ref={(el) => {
+            blockRefs.current[`funnel-${i}`] = el;
+          }}
+          className="absolute will-change-[opacity,transform]"
+          style={{ top: FUNNEL_POS[i].top, left: FUNNEL_POS[i].left, opacity: 0 }}
+        >
+          <div className="flex items-center gap-3">
+            <span className="h-px w-7 bg-white/40" />
+            <span
+              className="font-display text-lg font-medium tracking-tight text-white/90 sm:text-xl"
+              style={{ textShadow: "0 2px 26px rgba(4,6,12,0.9)" }}
+            >
+              {label}
+            </span>
+          </div>
+        </div>
+      ))}
+    </>
+  );
+}
+
+// Starfield scene: one large, blocky, glowing statement, centered. Opacity (and
+// a subtle scale) driven per frame in handleFrame (key `starfield`).
+function StarfieldStatement({
+  blockRefs,
+}: {
+  blockRefs: MutableRefObject<Record<string, HTMLDivElement | null>>;
+}) {
+  return (
+    <div
+      ref={(el) => {
+        blockRefs.current["starfield"] = el;
+      }}
+      className="absolute inset-0 flex items-center justify-center px-6 will-change-[opacity,transform]"
+      style={{ opacity: 0 }}
+    >
+      <h2
+        className="max-w-5xl text-center font-display text-4xl font-bold leading-[1.03] tracking-tight text-white sm:text-6xl lg:text-7xl"
+        style={{
+          textShadow:
+            "0 0 34px rgba(255,255,255,0.5), 0 0 78px rgba(255,255,255,0.24)",
+        }}
+      >
+        {STARFIELD_STATEMENT}
+      </h2>
+    </div>
+  );
+}
+
 export function Overlay({
   blockRefs,
 }: {
@@ -132,6 +205,8 @@ export function Overlay({
 }) {
   return (
     <div className="pointer-events-none fixed inset-0 z-[52]">
+      <FunnelBlocks blockRefs={blockRefs} />
+      <StarfieldStatement blockRefs={blockRefs} />
       {CONTENT_SCENES.map((scene) => {
         const centered = scene.copy?.align === "center";
         return (

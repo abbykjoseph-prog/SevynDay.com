@@ -13,7 +13,7 @@ import { useExperienceProgress } from "./progressDrive";
 // (starfield, terrain). Interpolated with the same segment blend as the shapes.
 const SPIN: Record<string, number> = {
   sphere: 0.14,
-  funnel: 0.05,
+  funnel: 0.09, // slightly faster so the funnel labels reveal a bit livelier
   helix: 0.16,
   starfield: 0.0,
   terrain: 0.0,

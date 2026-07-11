@@ -3,8 +3,14 @@
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { ScrollControls, useScroll } from "@react-three/drei";
-import { EXPERIENCE, SCENES } from "@/config/experience";
-import { easeOutCubic, pulse, range01, smoothstep } from "./math";
+import { EXPERIENCE, FUNNEL_BLOCKS, SCENES } from "@/config/experience";
+import {
+  easeOutCubic,
+  pulse,
+  range01,
+  smoothstep,
+  windowFade,
+} from "./math";
 import { ParticleField } from "./ParticleField";
 import { CameraRig } from "./CameraRig";
 import { Effects } from "./Effects";
@@ -21,16 +27,16 @@ type ExperienceProps = { isMobile: boolean; reducedMotion: boolean };
 function FrameBridge({
   onFrame,
 }: {
-  onFrame: (p: number, intro: number) => void;
+  onFrame: (p: number, intro: number, time: number) => void;
 }) {
   const progress = useExperienceProgress();
   const introT = useRef(0);
+  const time = useRef(0);
   useFrame((_, delta) => {
-    introT.current = Math.min(
-      introT.current + Math.min(delta, 0.05) / EXPERIENCE.intro.seconds,
-      1,
-    );
-    onFrame(progress.current, easeOutCubic(introT.current));
+    const dt = Math.min(delta, 0.05);
+    introT.current = Math.min(introT.current + dt / EXPERIENCE.intro.seconds, 1);
+    time.current += dt; // frame-accumulated seconds, for continuous drift
+    onFrame(progress.current, easeOutCubic(introT.current), time.current);
   });
   return null;
 }
@@ -100,7 +106,7 @@ export function Experience({ isMobile, reducedMotion }: ExperienceProps) {
   }, []);
 
   const handleFrame = useCallback(
-    (p: number, intro: number) => {
+    (p: number, intro: number, time: number) => {
       // heroIntro eases 0→1 once on load; forced to 1 when the intro is disabled.
       const heroIntro = introEnabled ? intro : 1;
 
@@ -133,6 +139,33 @@ export function Experience({ isMobile, reducedMotion }: ExperienceProps) {
         // button wrapper becomes interactive, and only while the scene is visible.
         const cta = el.querySelector<HTMLElement>("[data-cta]");
         if (cta) cta.style.pointerEvents = fade > 0.6 ? "auto" : "none";
+      }
+
+      // Funnel scene: three labels reveal in a staggered sequence, each with a
+      // slow elliptical drift (phase-offset) so they read as loosely wrapping the
+      // rotating funnel. HTML stays crisp — no mapping onto the 3D mesh.
+      const funnelOut = 1 - range01(p, 0.215, 0.245);
+      for (let i = 0; i < FUNNEL_BLOCKS.length; i++) {
+        const el = overlayRefs.current[`funnel-${i}`];
+        if (!el) continue;
+        const inStart = 0.11 + i * 0.03; // staggered entrance
+        const reveal = smoothstep(
+          Math.min(range01(p, inStart, inStart + 0.03), funnelOut),
+        );
+        const phase = i * 2.1;
+        const driftX = Math.sin(time * 0.5 + phase) * 11;
+        const driftY = Math.cos(time * 0.42 + phase) * 8;
+        el.style.opacity = String(reveal);
+        el.style.transform = `translate(${driftX}px, ${driftY + (1 - reveal) * 14}px)`;
+      }
+
+      // Starfield scene: the centered statement fades in as the scene enters and
+      // out as it leaves, with a subtle scale for impact.
+      const star = overlayRefs.current["starfield"];
+      if (star) {
+        const f = windowFade(p, 0.38, 0.5, 0.035);
+        star.style.opacity = String(f);
+        star.style.transform = `scale(${0.965 + 0.035 * f})`;
       }
 
       // The scroll hint fades out once the user leaves the hero.
