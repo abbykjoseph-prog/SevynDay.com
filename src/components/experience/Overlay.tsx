@@ -4,6 +4,7 @@ import Link from "next/link";
 import type { MutableRefObject } from "react";
 import {
   FUNNEL_LABELS,
+  FUNNEL_STYLE,
   SCENES,
   STARFIELD_STATEMENT,
   type SceneDef,
@@ -131,26 +132,28 @@ function CopyBlock({ scene }: { scene: SceneDef }) {
 }
 
 // Funnel scene: three flat overlay labels stacked as a centered vertical list in
-// the thin, sparse UPPER portion of the funnel (never the dense lower part). Each
-// line's opacity / rise (reveal) and the whole stack's horizontal drift are
-// driven per frame in handleFrame (keys `funnel-0..2`). A feathered radial scrim
-// + text-shadow keep them legible even over the brightest particles.
+// the thin, sparse UPPER portion of the funnel (never the dense lower part). The
+// whole stack fades in/out and glides left → right as one unit, driven per frame
+// in handleFrame (key `funnel-stack`). A feathered radial scrim + the blue-glow
+// CSS class keep them legible even over the brightest particles.
 function FunnelLabelsOverlay({
   blockRefs,
 }: {
   blockRefs: MutableRefObject<Record<string, HTMLDivElement | null>>;
 }) {
+  // One stack: the whole group's fade + glide (translateX) + slight rise are
+  // driven together in handleFrame (key `funnel-stack`). Lines are static; the
+  // blue glow + subtle shimmer come from the `.funnel-label-glow` CSS class.
   return (
-    <div className="absolute left-1/2 top-[13%] flex -translate-x-1/2 flex-col items-center gap-6 text-center sm:gap-7">
-      {FUNNEL_LABELS.map((label, i) => (
-        <div
-          key={label.text}
-          ref={(el) => {
-            blockRefs.current[`funnel-${i}`] = el;
-          }}
-          className="relative will-change-[opacity,transform]"
-          style={{ opacity: 0 }}
-        >
+    <div
+      ref={(el) => {
+        blockRefs.current["funnel-stack"] = el;
+      }}
+      className="absolute left-1/2 top-[13%] flex flex-col items-center gap-6 text-center will-change-[opacity,transform] sm:gap-7"
+      style={{ opacity: 0, transform: "translate(-50%, 0)" }}
+    >
+      {FUNNEL_LABELS.map((label) => (
+        <div key={label} className="relative">
           {/* Soft feathered dark backing — no visible box, just a legibility halo. */}
           <div
             aria-hidden
@@ -162,17 +165,14 @@ function FunnelLabelsOverlay({
                 "radial-gradient(ellipse at center, rgba(4,6,12,0.5) 0%, rgba(4,6,12,0.26) 44%, rgba(4,6,12,0) 72%)",
             }}
           />
-          {/* letter-spacing + text-shadow (glow/shimmer) are driven per frame in
-              handleFrame for the power-on entrance; these are the resting values. */}
           <span
-            className="font-display text-2xl font-semibold tracking-tight sm:text-3xl"
+            className="funnel-label-glow font-display font-semibold leading-none tracking-tight"
             style={{
               color: "#f4f7fb",
-              textShadow:
-                "0 0 2px rgba(255,255,255,0.9), 0 0 12px rgba(46,168,255,0.8), 0 0 30px rgba(46,168,255,0.45), 0 1px 10px rgba(4,6,12,0.92)",
+              fontSize: `min(${FUNNEL_STYLE.fontSizePx}px, 7vw)`,
             }}
           >
-            {label.text}
+            {label}
           </span>
         </div>
       ))}

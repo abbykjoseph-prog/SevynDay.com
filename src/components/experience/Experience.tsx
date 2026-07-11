@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { ScrollControls, useScroll } from "@react-three/drei";
-import { EXPERIENCE, FUNNEL_DRIFT, FUNNEL_LABELS, SCENES } from "@/config/experience";
+import { EXPERIENCE, FUNNEL_STYLE, SCENES } from "@/config/experience";
 import {
   easeOutCubic,
   pulse,
@@ -27,16 +27,16 @@ type ExperienceProps = { isMobile: boolean; reducedMotion: boolean };
 function FrameBridge({
   onFrame,
 }: {
-  onFrame: (p: number, intro: number, time: number, dt: number) => void;
+  onFrame: (p: number, intro: number) => void;
 }) {
   const progress = useExperienceProgress();
   const introT = useRef(0);
-  const time = useRef(0);
   useFrame((_, delta) => {
-    const dt = Math.min(delta, 0.05);
-    introT.current = Math.min(introT.current + dt / EXPERIENCE.intro.seconds, 1);
-    time.current += dt; // frame-accumulated seconds (funnel-label entrance + shimmer)
-    onFrame(progress.current, easeOutCubic(introT.current), time.current, dt);
+    introT.current = Math.min(
+      introT.current + Math.min(delta, 0.05) / EXPERIENCE.intro.seconds,
+      1,
+    );
+    onFrame(progress.current, easeOutCubic(introT.current));
   });
   return null;
 }
@@ -77,7 +77,6 @@ export function Experience({ isMobile, reducedMotion }: ExperienceProps) {
   const flashRef = useRef<HTMLDivElement>(null);
   const scrollHintRef = useRef<HTMLDivElement>(null);
   const overlayRefs = useRef<Record<string, HTMLDivElement | null>>({});
-  const funnelRev = useRef<number[]>([0, 0, 0]); // per-label power-on progress
 
   const count = isMobile
     ? EXPERIENCE.particles.mobile
@@ -107,7 +106,7 @@ export function Experience({ isMobile, reducedMotion }: ExperienceProps) {
   }, []);
 
   const handleFrame = useCallback(
-    (p: number, intro: number, time: number, dt: number) => {
+    (p: number, intro: number) => {
       // heroIntro eases 0→1 once on load; forced to 1 when the intro is disabled.
       const heroIntro = introEnabled ? intro : 1;
 
@@ -142,44 +141,19 @@ export function Experience({ isMobile, reducedMotion }: ExperienceProps) {
         if (cta) cta.style.pointerEvents = fade > 0.6 ? "auto" : "none";
       }
 
-      // Funnel scene. Each label "powers on" over ~0.5s once scroll passes its
-      // config `reveal` p — a time-based entrance (fade + ~14px rise + a
-      // letter-spacing snap from wide → tight), staggered by the three reveal
-      // points. The whole centered stack drifts gently left → right across the
-      // scene, and the electric-blue glow shimmers slowly. Translate only — no
-      // rotation/3D. All fade out together as the exit begins.
+      // Funnel scene: the whole label stack fades in TOGETHER (~p=0.16) and out
+      // at the exit, gliding as ONE unit from FUNNEL_STYLE.startX → startX+glide
+      // (left → right) across the scene, with a small group rise on the fade-in.
+      // Translate only — no rotation/3D; the glow + shimmer are CSS.
+      const funnelIn = smoothstep(range01(p, 0.14, 0.16));
       const funnelOut = smoothstep(1 - range01(p, 0.175, 0.215));
-      const driftX =
-        FUNNEL_DRIFT.startX + range01(p, 0.14, 0.215) * FUNNEL_DRIFT.distance;
-      const ENTRANCE = 0.5; // seconds to fully power on
-      for (let i = 0; i < FUNNEL_LABELS.length; i++) {
-        const el = overlayRefs.current[`funnel-${i}`];
-        if (!el) continue;
-        // Advance the per-label entrance toward 1 once its reveal p is crossed;
-        // ease back if the user scrolls above it again.
-        const target = p >= FUNNEL_LABELS[i].reveal ? 1 : 0;
-        const rev = funnelRev.current[i];
-        funnelRev.current[i] =
-          target > rev
-            ? Math.min(rev + dt / ENTRANCE, 1)
-            : Math.max(rev - dt / (ENTRANCE * 0.6), 0);
-        const e = easeOutCubic(funnelRev.current[i]);
-
-        el.style.opacity = String(e * funnelOut);
-        el.style.transform = `translate(${driftX}px, ${(1 - e) * 14}px)`;
-
-        const span = el.querySelector<HTMLElement>("span");
-        if (span) {
-          // Wide tracking that snaps to tight as it powers on.
-          span.style.letterSpacing = `${(0.16 * (1 - e) - 0.02 * e).toFixed(3)}em`;
-          // Layered near-white core + electric-blue bloom, gently shimmering.
-          const shimmer = 0.82 + 0.18 * Math.sin(time * 1.3 + i * 1.7);
-          span.style.textShadow =
-            `0 0 2px rgba(255,255,255,${(0.9 * shimmer).toFixed(3)}),` +
-            `0 0 12px rgba(46,168,255,${(0.85 * shimmer).toFixed(3)}),` +
-            `0 0 30px rgba(46,168,255,${(0.45 * shimmer).toFixed(3)}),` +
-            `0 1px 10px rgba(4,6,12,0.92)`;
-        }
+      const stack = overlayRefs.current["funnel-stack"];
+      if (stack) {
+        stack.style.opacity = String(Math.min(funnelIn, funnelOut));
+        const glideX =
+          FUNNEL_STYLE.startX + range01(p, 0.14, 0.215) * FUNNEL_STYLE.glide;
+        const rise = (1 - funnelIn) * 10;
+        stack.style.transform = `translate(calc(-50% + ${glideX.toFixed(2)}px), ${rise.toFixed(2)}px)`;
       }
 
       // Starfield scene: the centered statement fades in as the scene enters and

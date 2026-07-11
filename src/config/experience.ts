@@ -231,19 +231,20 @@ export const SCROLL_RESISTANCE: Record<SceneId, number> = {
 // CopyBlock). Text lives here; layout/timing/drift live in Overlay.tsx +
 // Experience's frame loop.
 //
-// Funnel: three flat overlay labels revealed SEQUENTIALLY as scroll advances
-// through the funnel scene. `reveal` is the scroll offset p at which each label
-// is fully in — it fades + rises just before that point. Tune these to re-time
-// the sequence. (They fade out together as the exit transition begins, ~0.175.)
-export const FUNNEL_LABELS: { text: string; reveal: number }[] = [
-  { text: "Instant Adjudication", reveal: 0.16 },
-  { text: "Forensic Papertrail", reveal: 0.165 },
-  { text: "Effortless Caseload", reveal: 0.17 },
+// Funnel: three flat overlay labels, stacked and centered in the sparse upper
+// funnel. They fade in TOGETHER (~p=0.16) and fade out together at the exit.
+export const FUNNEL_LABELS = [
+  "Instant Adjudication",
+  "Forensic Papertrail",
+  "Effortless Caseload",
 ];
 
-// The centered funnel-label stack starts at `startX` px (slightly left of center)
-// and drifts `distance` px to the right across the scene. Tune the feel here.
-export const FUNNEL_DRIFT = { startX: -32, distance: 64 };
+// The centered stack fades in together (~0.16), glides as one unit from `startX`
+// px (off-center left) to `startX + glide` px (right) across the scene, and
+// renders at `fontSizePx` (capped responsively so it fits small screens). Keep
+// `startX + glide` small enough that the longest line stays on screen at the end
+// of the glide. Tune all three here.
+export const FUNNEL_STYLE = { startX: -80, glide: 180, fontSizePx: 42 };
 // Starfield: one large, glowing, centered statement that fades in/out with the
 // scene.
 export const STARFIELD_STATEMENT =

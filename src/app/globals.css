@@ -27,3 +27,38 @@
     @apply mx-auto w-full max-w-content px-6 sm:px-8;
   }
 }
+
+/* Funnel Dissolve labels: layered near-white core + electric-blue bloom, with a
+   subtle slow shimmer. The glow lives here (one place); the shimmer only runs
+   when motion is allowed. */
+.funnel-label-glow {
+  text-shadow:
+    0 0 2px rgba(255, 255, 255, 0.9),
+    0 0 12px rgba(46, 168, 255, 0.75),
+    0 0 30px rgba(46, 168, 255, 0.42),
+    0 1px 10px rgba(4, 6, 12, 0.92);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .funnel-label-glow {
+    animation: funnelLabelGlow 4.5s ease-in-out infinite;
+  }
+}
+
+@keyframes funnelLabelGlow {
+  0%,
+  100% {
+    text-shadow:
+      0 0 2px rgba(255, 255, 255, 0.82),
+      0 0 10px rgba(46, 168, 255, 0.62),
+      0 0 26px rgba(46, 168, 255, 0.33),
+      0 1px 10px rgba(4, 6, 12, 0.92);
+  }
+  50% {
+    text-shadow:
+      0 0 3px rgba(255, 255, 255, 0.98),
+      0 0 16px rgba(46, 168, 255, 0.9),
+      0 0 36px rgba(46, 168, 255, 0.55),
+      0 1px 10px rgba(4, 6, 12, 0.92);
+  }
+}
