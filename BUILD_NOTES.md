@@ -134,8 +134,14 @@ Almost everything lives in **`src/config/experience.ts`**:
 - **`SCENES`** — per-scene copy (eyebrow / heading / sub / buttons / stats), content
   `range`, and gradient `colorA`/`colorB`. Edit copy and colors here.
 - **`HOLD_ZONES`** — where each shape holds vs. morphs (pacing).
-- **`EXPERIENCE`** — `pages`, `damping`, `background`, `dpr`, `particles` (desktop/mobile
-  counts), `palette`, `flash` (range + peak), and `outro` (finale trigger + timings).
+- **`EXPERIENCE.snap`** — the snap-to-section scroll model: `baseMs` / `minMs` /
+  `maxMs` / `refSpan` (per-transition duration = `baseMs * span / refSpan`, clamped —
+  so the long climax takes the max), `lockMs` (input cooldown after landing), and the
+  `wheelThreshold` / `swipeThreshold` input filters.
+- **`EXPERIENCE.outro`** — finale timings (`wordmarkMs`, `panelMs`), background fade
+  (`bgFadeVh`), and the parked-logo `parkScale` / `parkX` / `parkY` (top-left position).
+- **`EXPERIENCE`** — `pages`, `damping` (legacy, unused by the snap model),
+  `background`, `dpr`, `particles`, `palette`, `flash`, `intro`.
 - **`PROGRESS_STAGES` / `PROGRESS_DOTS`** — the right-edge scroll-progress indicator:
   the six CONTENT stages (name + anchor `at` p) and the dot styling (colors, size,
   gap, active scale, glow). The active dot is driven per frame in `handleFrame`
@@ -152,6 +158,59 @@ Other tunables:
 
 The stat numbers in the helix scene are placeholders, tagged **`TODO_UNVERIFIED_STAT`**
 in `config/experience.ts` — replace once real figures are sourced.
+
+The finale panel CTAs ("Explore the platform" / "See integrations") are
+**`TODO_PLACEHOLDER`** in `config/experience.ts` (orbital `buttons`) — copy +
+destinations are placeholder; they link to the on-page stub sections (`#features`,
+`#how-it-works`) for now.
+
+---
+
+## Scroll model, finale & state persistence
+
+**Snap-to-section (not free scrubbing).** The master `progress` (0..1, still read by
+every scene unchanged) is no longer a follow of `scroll.offset` — ScrollControls is
+gone. It is now tweened between the six stage targets (`PROGRESS_STAGES[i].at`) by
+`SnapDriver` (in `Experience.tsx`), eased with `easeInOutCubic`. A `snap` ref holds
+`{ value, stage, from, to, t, dur, animating, lastArrive }`; `SnapDriver` advances the
+tween each frame and mirrors `snap.value → progress.current`.
+
+- **One gesture = one stage.** Window `wheel` / `keydown` / `touch` listeners (active
+  only in `scrub`) call `step(±1)`. Input is **locked** while `snap.animating` and for
+  `lockMs` after landing — so a trackpad flick (many events) or a mouse notch both
+  advance exactly one stage. Wheel/touch defaults are `preventDefault`'d so the page
+  never scrolls under the pinned experience. Up/back settles on the previous stage.
+- **Atomic climax.** Wave Terrain → Orbital is simply stage 4 → 5, but that span covers
+  the gravity well + white flash, so the single tween plays the whole run and lands
+  stably on Orbital(SEVYNDAY). Because input is locked for the whole tween, the user
+  can never stop inside the well/flash. Same for clicking the Orbital dot.
+- **Clickable dots** call `goToStage` (same tween). Clicking a dot after handoff
+  re-enters the experience (`reenter`). Tune feel via `EXPERIENCE.snap`.
+
+**Finale / handoff (`phase`: scrub → outro → released).** A forward gesture at Orbital
+starts the outro (atomic — listeners unmount, so no input during it). SEVYNDAY shrinks
++ moves from center to a **parked top-left** logo (transform driven by
+`outro.parkScale/parkX/parkY`) and stays there as a persistent site logo; the platform
+panel rises from the bottom (`SiteSections.tsx`). After `max(wordmarkMs, panelMs)` the
+phase releases: body scroll unlocks, the document scrolls normally through the panel +
+stub sections, the WebGL background fades over `bgFadeVh` viewport-heights and its
+render pauses (`frameloop="never"`) once off-screen. **Gradient softening:** the panel
+background is a vertical dissolve (transparent top → `#04060c` bottom) so the orbit
+feathers into the content with no hard edge.
+
+**State persistence (home / back land at the END).** On mount `Experience` reads the
+Navigation Timing type (`performance.getEntriesByType('navigation')[0].type`):
+`back_forward` → initialize **directly** in the resolved end-state (`phase: released`,
+snap on Orbital, hero gather disabled) so there is no replay/flash; `reload` / fresh
+`navigate` → play from Hero. bfcache restores also land at the end-state (the finale is
+the only place a user can navigate away from). The parked SEVYNDAY logo is a button
+whose click runs `goHome()` — snap to Orbital + release + scroll to top, instantly, no
+replay.
+
+**Reduced-motion / mobile.** Reduced-motion still renders `ReducedExperience` (a normal
+document-scroll static page) — now with SEVYNDAY parked top-left + the stub sections, so
+it matches the resolved end-state without animation. Mobile uses swipe gestures for the
+same one-swipe-per-stage behavior; the dots shrink/reposition.
 
 ---
 
