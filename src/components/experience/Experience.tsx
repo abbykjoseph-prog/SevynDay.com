@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { ScrollControls, useScroll } from "@react-three/drei";
 import { EXPERIENCE, SCENES } from "@/config/experience";
@@ -65,7 +65,9 @@ export function Experience({ isMobile }: ExperienceProps) {
       /debug/.test(window.location.hash + window.location.search),
     [],
   );
-  const [showHud] = useState(debug);
+  // Dev-only progress HUD: renders under `next dev`, tree-shaken out of
+  // production builds. (The #debug bridge above stays independent of this.)
+  const showHud = process.env.NODE_ENV === "development";
 
   // R3F's first size measurement inside this position:fixed container comes back
   // as the 300x150 canvas default and the ResizeObserver never re-fires (the
@@ -117,7 +119,7 @@ export function Experience({ isMobile }: ExperienceProps) {
       const scene =
         SCENES.find((s) => p >= s.range[0] && p <= s.range[1])?.label ??
         "— transition —";
-      hud.textContent = `p ${p.toFixed(3)}  ·  ${scene}`;
+      hud.textContent = `p ${p.toFixed(2)}  ·  ${scene}`;
     }
   }, []);
 
@@ -167,7 +169,7 @@ export function Experience({ isMobile }: ExperienceProps) {
           ref={hudRef}
           className="pointer-events-none fixed left-4 top-4 z-[60] rounded-md border border-white/15 bg-black/50 px-3 py-1.5 font-mono text-xs text-white/80 backdrop-blur"
         >
-          p 0.000
+          p 0.00
         </div>
       )}
 
