@@ -15,7 +15,11 @@ import {
 // transform / pointer-events are driven per frame from the scroll offset by
 // Experience (see handleFrame), so blocks cross-fade as their scene arrives.
 
-export const CONTENT_SCENES: SceneDef[] = SCENES.filter((s) => s.copy);
+// Orbital is excluded: at the finale it shows the SEVYNDAY wordmark instead, and
+// its copy is re-presented as the released platform panel (see SiteSections).
+export const CONTENT_SCENES: SceneDef[] = SCENES.filter(
+  (s) => s.copy && s.id !== "orbital",
+);
 
 function Pill({
   children,

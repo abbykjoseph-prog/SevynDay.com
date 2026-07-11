@@ -33,6 +33,10 @@ export function Header() {
     };
   }, [isHome]);
 
+  // The /experience route is a full-bleed WebGL experience that owns the whole
+  // viewport (and hands off into its own footer), so the site chrome is hidden.
+  if (pathname === "/experience") return null;
+
   // Over the home hero the header is invisible and non-interactive. On the home
   // page it is `fixed` (out of flow) so the hero sits flush at the very top;
   // elsewhere it is a normal sticky header.

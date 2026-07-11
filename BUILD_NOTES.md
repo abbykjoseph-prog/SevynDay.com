@@ -154,10 +154,11 @@ in `config/experience.ts` — replace once real figures are sourced.
 
 ## Decisions & assumptions
 
-- **Full-screen overlay vs. route group.** The experience is `position:fixed inset-0
-  z-50`, so it sits *over* the global `Header`/`Footer` rather than restructuring the
-  app's route groups (which would touch existing pages). The reduced-motion fallback is
-  normal-flow, so it *shows* the site chrome — appropriate for a static, navigable page.
+- **Layout / site chrome.** The WebGL layer is a `fixed inset-0 z-0` background and the
+  released site content is normal document flow above it (`z-10`). Because the canvas is
+  no longer a `z-50` cover, the global `Header`/`Footer` are hidden on `/experience`
+  (each early-returns `null` when `usePathname() === "/experience"` — `Footer` became a
+  client component for this). The page supplies its own footer (see the handoff section).
 - **Reference recording.** `ffmpeg` wasn't available and `qlmanage` hung, so frames
   couldn't be extracted from the provided `.mov`. Built from the written spec (which is
   authoritative for copy/ranges/architecture/colors) plus knowledge of the reference's
@@ -170,6 +171,55 @@ in `config/experience.ts` — replace once real figures are sourced.
   directly and force-renders one frame via R3F's `advance()` — needed because the
   headless preview tab pauses `requestAnimationFrame`. Gated behind `#debug`; absent in
   normal use.
+
+## Finale / outro — pinned → normal-scroll handoff
+
+The most delicate part: handing the pinned, scroll-scrubbed WebGL experience off into
+a normally-scrolling site, without a visual jump. It's a 3-phase state machine in
+`Experience.tsx` (`phase: "scrub" | "outro" | "released"`).
+
+- **scrub** — as before. ScrollControls drives scenes 1–8. When progress reaches the
+  orbital scene, the **"SEVYNDAY"** wordmark fades in (opacity driven per frame in
+  `handleFrame`). Body scroll is **locked** (`html`/`body` `overflow:hidden`) so only
+  ScrollControls scrubs.
+- **outro** — triggered by the user's next scroll-down at the orbital finale. A window
+  wheel/touch/key listener fires **only** while `phase==="scrub"` AND
+  `progress ≥ outro.triggerThreshold` (guards against firing early / off-orbital), and
+  the listeners are torn down the instant we leave scrub (guards double-fire). The outro
+  is **self-playing** (ignores further scrubbing — ScrollControls is `enabled={false}`):
+  "SEVYNDAY" translates up-and-off and the platform panel rises from the bottom. Both are
+  CSS transitions **driven by `phase` in JSX** (not imperative), so React re-renders
+  never reset them.
+- **released** — after `max(wordmarkMs, panelMs)+80ms` the phase flips to `released`:
+  body scroll is **unlocked**, the WebGL layer goes `pointer-events:none`, and the
+  document scrolls normally.
+
+**Why there's no jump:** the released content (platform panel + placeholder sections)
+lives in normal document flow the *whole time*. During scrub it's just translated
+`translateY(100vh)` (below the fold) with body scroll locked. The outro animates it to
+`translateY(0)`; release only **removes the transform + unlocks scroll** — and its
+layout position already *is* scroll-0, so nothing moves.
+
+**Background fade + teardown:** after release, a scroll listener fades the WebGL
+background out over `outro.bgFadeVh` viewport-heights, then pauses the render
+(`Canvas frameloop` → `"never"`) once it's off-screen; scrolling back up resumes it.
+
+**Where to tune:** `EXPERIENCE.outro` in `config/experience.ts`
+(`triggerThreshold`, `wordmarkMs`, `panelMs`, `bgFadeVh`). The SEVYNDAY fade-in range
+(`0.9→0.95`) and the outro easing curves are in `Experience.tsx`. The landing panel and
+the **Features / How it works / Pricing / Footer** stubs are in `SiteSections.tsx`
+(the panel reuses the orbital scene's copy; orbital is excluded from the scrubbed
+overlays in `Overlay.tsx`). Reduced-motion and mobile: reduced users get the static page
+(`ReducedExperience.tsx`, no outro, normal scroll); mobile uses the same machine with a
+touch-swipe trigger.
+
+**Verified (against the dev server):** scrub scenes unchanged; SEVYNDAY at orbital;
+wheel/key trigger → outro (content `translateY(0)` + transition) → released (wordmark
+unmounted, body scroll unlocked, bg `pointer-events:none`, document scrollable); all
+placeholder sections render; reduced-motion static page scrolls normally; no console
+errors. The scroll-driven bg fade and the live outro *animation* are best confirmed in a
+foreground browser (the headless test tab pauses rAF/timers and defers programmatic
+scroll).
 
 ## Known gaps / polish next
 

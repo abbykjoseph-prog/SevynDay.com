@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { EXPERIENCE, SCENES } from "@/config/experience";
+import { PlaceholderSections } from "./SiteSections";
 
 // prefers-reduced-motion fallback: no WebGL, no scroll-jacking. A static, still
 // hero over a soft radial glow, followed by the content scenes as normal
@@ -114,6 +115,17 @@ export function ReducedExperience() {
           </div>
         </section>
       ))}
+
+      {/* Finale wordmark, then the normal-scrolling placeholder sections. */}
+      <section className="relative flex min-h-[52vh] items-center justify-center border-t border-white/5 px-6 text-center">
+        <span
+          className="font-display text-5xl font-bold tracking-tight text-white sm:text-7xl"
+          style={{ textShadow: "0 0 30px rgba(255,255,255,0.4)" }}
+        >
+          SEVYNDAY
+        </span>
+      </section>
+      <PlaceholderSections />
     </div>
   );
 }

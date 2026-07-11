@@ -72,6 +72,21 @@ export const EXPERIENCE = {
    *  the hero text fades + rises `risePx`, over `seconds` with ease-out. Plays
    *  once on load (time-based from mount), never re-triggered by scroll. */
   intro: { seconds: 1.2, risePx: 16 },
+  /** Finale / outro: at the orbital scene "SEVYNDAY" shows; the user's next
+   *  scroll-down TRIGGERS a self-playing outro (ignores further scrubbing), then
+   *  the pinned WebGL experience hands off to normal document scrolling.
+   *   - triggerThreshold: progress p at/after which a scroll-down fires the outro
+   *     (guards against firing before the orbital scene is actually reached)
+   *   - wordmarkMs: "SEVYNDAY" exit-up duration
+   *   - panelMs: platform panel rise duration
+   *   - bgFadeVh: viewport-heights of post-release scroll over which the WebGL
+   *     background fades to the site's dark bg (then the render is paused) */
+  outro: {
+    triggerThreshold: 0.965,
+    wordmarkMs: 850,
+    panelMs: 1000,
+    bgFadeVh: 0.85,
+  },
   background: "#04060c",
   /** device-pixel-ratio clamp for the Canvas */
   dpr: [1, 1.75] as [number, number],

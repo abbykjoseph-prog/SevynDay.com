@@ -1,4 +1,7 @@
+"use client";
+
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { Container } from "@/components/Container";
 import { Logo } from "@/components/Logo";
 import { site } from "@/lib/site";
@@ -22,6 +25,9 @@ const footerNav = [
 ];
 
 export function Footer() {
+  // The /experience route supplies its own footer inside the WebGL page.
+  if (usePathname() === "/experience") return null;
+
   return (
     <footer className="border-t border-slate-200 bg-slate-50">
       <Container className="grid gap-10 py-14 md:grid-cols-[1.5fr_1fr_1fr]">
