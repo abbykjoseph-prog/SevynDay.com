@@ -4,12 +4,13 @@ import { useCallback, useEffect, useMemo, useRef } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { ScrollControls, useScroll } from "@react-three/drei";
 import { EXPERIENCE, SCENES } from "@/config/experience";
-import { clamp01, pulse, range01, smoothstep } from "./math";
+import { pulse, range01, smoothstep } from "./math";
 import { ParticleField } from "./ParticleField";
 import { CameraRig } from "./CameraRig";
 import { Effects } from "./Effects";
 import { SceneExtras } from "./SceneExtras";
 import { Overlay, CONTENT_SCENES } from "./Overlay";
+import { ProgressProvider, useExperienceProgress } from "./progressDrive";
 
 type ExperienceProps = { isMobile: boolean };
 
@@ -20,8 +21,8 @@ function FrameBridge({
 }: {
   onFrame: (p: number) => void;
 }) {
-  const scroll = useScroll();
-  useFrame(() => onFrame(clamp01(scroll.offset)));
+  const progress = useExperienceProgress();
+  useFrame(() => onFrame(progress.current));
   return null;
 }
 
@@ -31,21 +32,23 @@ function FrameBridge({
 function DebugBridge() {
   const advance = useThree((s) => s.advance);
   const scroll = useScroll();
+  const progress = useExperienceProgress();
   useEffect(() => {
     (window as unknown as { __exp: { goto(f: number): void } }).__exp = {
-      // Jump to scroll offset f and render one settled frame. Sets both the
-      // scroll element's scrollTop AND drei's damped `offset` to f so damping is
-      // already converged (advance()'s real-clock delta would otherwise crawl).
+      // Jump to scroll offset f and render one settled frame. Sets the scroll
+      // element's scrollTop, drei's `offset`, AND snaps the shared progress to f
+      // (otherwise the rate-limited driver would only crawl toward the target).
       goto(f: number) {
         const el = scroll.el;
         el.scrollTop = f * (el.scrollHeight - el.clientHeight);
         scroll.offset = f;
+        progress.current = f;
         const t = performance.now();
         advance(t + 16.7);
         advance(t + 33.4);
       },
     };
-  }, [advance, scroll]);
+  }, [advance, scroll, progress]);
   return null;
 }
 
@@ -142,12 +145,16 @@ export function Experience({ isMobile }: ExperienceProps) {
         onCreated={({ gl }) => gl.setClearColor(EXPERIENCE.background, 1)}
       >
         <ScrollControls pages={EXPERIENCE.pages} damping={EXPERIENCE.damping}>
-          <ParticleField count={count} sizeBase={isMobile ? 20 : 16} />
-          <SceneExtras />
-          <CameraRig />
-          <FrameBridge onFrame={handleFrame} />
-          {debug && <DebugBridge />}
-          <Effects isMobile={isMobile} />
+          {/* ProgressProvider mounts its driver first, then feeds one smoothed,
+              rate-limited progress value to every scene below. */}
+          <ProgressProvider>
+            <ParticleField count={count} sizeBase={isMobile ? 20 : 16} />
+            <SceneExtras />
+            <CameraRig />
+            <FrameBridge onFrame={handleFrame} />
+            {debug && <DebugBridge />}
+            <Effects isMobile={isMobile} />
+          </ProgressProvider>
         </ScrollControls>
       </Canvas>
 

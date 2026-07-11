@@ -2,11 +2,11 @@
 
 import { useRef } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
-import { useScroll } from "@react-three/drei";
 import * as THREE from "three";
 import { SCENES } from "@/config/experience";
 import { resolveSegment } from "./progress";
-import { clamp01, lerp } from "./math";
+import { lerp } from "./math";
+import { useExperienceProgress } from "./progressDrive";
 
 // Camera keyframes per scene (aligned to SCENES order). Position + look target.
 // Tunable here — this is the "camera path" referenced in BUILD_NOTES.
@@ -26,11 +26,11 @@ const CAM_BY_INDEX = SCENES.map((s) => CAM[s.id]);
 
 export function CameraRig() {
   const camera = useThree((s) => s.camera);
-  const scroll = useScroll();
+  const progress = useExperienceProgress();
   const target = useRef(new THREE.Vector3());
 
   useFrame((state) => {
-    const p = clamp01(scroll.offset);
+    const p = progress.current;
     const seg = resolveSegment(p);
     const a = CAM_BY_INDEX[seg.from];
     const b = CAM_BY_INDEX[seg.to] ?? a;

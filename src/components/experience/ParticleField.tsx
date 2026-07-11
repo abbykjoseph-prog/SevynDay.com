@@ -2,12 +2,12 @@
 
 import { useEffect, useMemo, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
-import { useScroll } from "@react-three/drei";
 import * as THREE from "three";
 import { EXPERIENCE, SCENES } from "@/config/experience";
 import { buildParticleBuffers } from "./shapes";
 import { resolveSegment } from "./progress";
-import { clamp01, lerp, windowFade } from "./math";
+import { lerp, windowFade } from "./math";
+import { useExperienceProgress } from "./progressDrive";
 
 // Per-scene spin rate (rad/s). Zero where a still frame reads better
 // (starfield, terrain). Interpolated with the same segment blend as the shapes.
@@ -82,7 +82,7 @@ type ParticleFieldProps = { count: number; sizeBase?: number };
 
 export function ParticleField({ count, sizeBase = 16 }: ParticleFieldProps) {
   const pointsRef = useRef<THREE.Points>(null);
-  const scroll = useScroll();
+  const progress = useExperienceProgress();
   const lastFrom = useRef(-1);
   const lastTo = useRef(-1);
   const starPhase = useRef(0);
@@ -161,7 +161,7 @@ export function ParticleField({ count, sizeBase = 16 }: ParticleFieldProps) {
 
   useFrame((_, delta) => {
     const dt = Math.min(delta, 0.05); // clamp big frame gaps (tab refocus)
-    const p = clamp01(scroll.offset);
+    const p = progress.current;
     const seg = resolveSegment(p);
 
     // Rebind the active from/to shapes when the segment changes. These

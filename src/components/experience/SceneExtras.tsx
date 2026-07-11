@@ -2,9 +2,9 @@
 
 import { useEffect, useMemo, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
-import { useScroll } from "@react-three/drei";
 import * as THREE from "three";
-import { clamp01, range01 } from "./math";
+import { range01 } from "./math";
+import { useExperienceProgress } from "./progressDrive";
 
 // Additive glow sprites that the pure-particle system can't express well:
 //  - a bright hot core (sun-like) at the centre of the orbital ecosystem
@@ -36,7 +36,7 @@ function makeGlowTexture() {
 }
 
 export function SceneExtras() {
-  const scroll = useScroll();
+  const progress = useExperienceProgress();
   const sun = useRef<THREE.Sprite>(null);
   const heroCore = useRef<THREE.Sprite>(null);
 
@@ -78,7 +78,7 @@ export function SceneExtras() {
   );
 
   useFrame((state) => {
-    const p = clamp01(scroll.offset);
+    const p = progress.current;
     const t = state.clock.elapsedTime;
 
     // Orbital sun: fades in as the rings resolve, then holds; gentle pulse.

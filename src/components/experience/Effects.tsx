@@ -2,7 +2,6 @@
 
 import { useRef } from "react";
 import { useFrame } from "@react-three/fiber";
-import { useScroll } from "@react-three/drei";
 import {
   EffectComposer,
   Bloom,
@@ -11,7 +10,8 @@ import {
 } from "@react-three/postprocessing";
 import { ToneMappingMode } from "postprocessing";
 import { EXPERIENCE } from "@/config/experience";
-import { clamp01, pulse } from "./math";
+import { pulse } from "./math";
+import { useExperienceProgress } from "./progressDrive";
 
 const BLOOM_BASE = 0.85;
 const BLOOM_FLASH_BOOST = 3.2;
@@ -23,12 +23,12 @@ type EffectsProps = { isMobile: boolean };
 // supplies the rest of the blowout), then decay back.
 export function Effects({ isMobile }: EffectsProps) {
   const bloom = useRef<{ intensity: number } | null>(null);
-  const scroll = useScroll();
+  const progress = useExperienceProgress();
   const { range, peak } = EXPERIENCE.flash;
 
   useFrame(() => {
     if (!bloom.current) return;
-    const f = pulse(clamp01(scroll.offset), range[0], range[1], peak);
+    const f = pulse(progress.current, range[0], range[1], peak);
     bloom.current.intensity = BLOOM_BASE + f * BLOOM_FLASH_BOOST;
   });
 

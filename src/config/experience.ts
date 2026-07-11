@@ -58,8 +58,16 @@ export interface SceneDef {
 export const EXPERIENCE = {
   /** number of viewport-heights of scroll; also drei ScrollControls `pages` */
   pages: 8,
-  /** ScrollControls smoothing */
-  damping: 0.22,
+  /** drei ScrollControls smoothing. Kept low so `scroll.offset` tracks the raw
+   *  scroll closely — the cinematic smoothing/rate-limiting is done on top of it
+   *  by the shared progress driver (see `scroll` below + progressDrive.tsx). */
+  damping: 0.1,
+  /** The single progress value that drives every scene animation is a smoothed,
+   *  speed-capped follow of `scroll.offset`:
+   *   - smooth:   damp rate toward the target (higher = snappier, lower = floatier)
+   *   - maxSpeed: hard ceiling on progress units/sec, so a scrollbar slam or fast
+   *     flick animates as a smooth catch-up instead of a jump. */
+  scroll: { smooth: 4, maxSpeed: 0.18 },
   background: "#04060c",
   /** device-pixel-ratio clamp for the Canvas */
   dpr: [1, 1.75] as [number, number],
