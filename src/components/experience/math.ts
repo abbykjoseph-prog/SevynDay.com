@@ -17,6 +17,12 @@ export const easeOutCubic = (t: number) => {
   return 1 - Math.pow(1 - x, 3);
 };
 
+/** Ease-in-out cubic on 0..1 — cinematic accelerate-then-settle (snap tweens). */
+export const easeInOutCubic = (t: number) => {
+  const x = clamp01(t);
+  return x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2;
+};
+
 /** Remap x from [a,b] to [0,1], clamped. */
 export const range01 = (x: number, a: number, b: number) =>
   clamp01((x - a) / (b - a || 1));

@@ -87,6 +87,23 @@ export const EXPERIENCE = {
     panelMs: 1000,
     bgFadeVh: 0.85,
   },
+  /** Snap-to-section scroll: one gesture advances through ONE transition and
+   *  settles on the next stage (never mid-morph). The transition still eases
+   *  smoothly — it just auto-completes. Per-transition duration is derived from
+   *  the progress span it covers: `baseMs * span / refSpan`, clamped to
+   *  [minMs, maxMs] — so the long Wave Terrain → Orbital climax run naturally
+   *  takes the max. `lockMs` is the input cooldown after landing (absorbs
+   *  trackpad momentum so one flick = one stage). Thresholds normalize wheel vs
+   *  swipe input. Snap targets are the stage anchors in PROGRESS_STAGES. */
+  snap: {
+    baseMs: 1100,
+    minMs: 620,
+    maxMs: 2800,
+    refSpan: 0.135,
+    lockMs: 260,
+    wheelThreshold: 6,
+    swipeThreshold: 44,
+  },
   background: "#04060c",
   /** device-pixel-ratio clamp for the Canvas */
   dpr: [1, 1.75] as [number, number],
@@ -276,7 +293,8 @@ export const PROGRESS_STAGES: { id: string; name: string; at: number }[] = [
   { id: "helix", name: "Helix", at: 0.3 },
   { id: "starfield", name: "Starfield", at: 0.435 },
   { id: "terrain", name: "Wave Terrain", at: 0.58 },
-  { id: "orbital", name: "Orbital", at: 0.92 },
+  // Orbital settles at 0.95 (also the snap target) so SEVYNDAY is fully shown.
+  { id: "orbital", name: "Orbital", at: 0.95 },
 ];
 
 // Dot styling for the progress indicator. Minimal/premium: dim white inactive,

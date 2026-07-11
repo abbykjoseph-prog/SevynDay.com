@@ -9,7 +9,6 @@ import {
   type MutableRefObject,
 } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
-import { ScrollControls, useScroll } from "@react-three/drei";
 import {
   EXPERIENCE,
   FUNNEL_STYLE,
@@ -19,7 +18,9 @@ import {
 } from "@/config/experience";
 import {
   clamp01,
+  easeInOutCubic,
   easeOutCubic,
+  lerp,
   pulse,
   range01,
   smoothstep,
@@ -37,9 +38,58 @@ import { ProgressProvider, useExperienceProgress } from "./progressDrive";
 type ExperienceProps = { isMobile: boolean; reducedMotion: boolean };
 type Phase = "scrub" | "outro" | "released";
 
-// The single place per frame where the master scroll offset is read out to DOM:
-// updates the (optional) debug HUD, the fullscreen white-flash overlay, the
-// hero's one-time load-in, and the finale wordmark. `intro` is a
+// The six CONTENT stages' settled progress values (the snap targets). One
+// gesture tweens `progress` between adjacent targets; the Wave Terrain → Orbital
+// step spans well+flash, so it plays as one long atomic climax run.
+const STAGE_TARGETS = PROGRESS_STAGES.map((s) => s.at);
+const N_STAGES = STAGE_TARGETS.length;
+
+type SnapState = {
+  value: number; // current progress 0..1 (mirrored into progress.current)
+  stage: number; // settled / target stage index
+  from: number;
+  to: number;
+  t: number; // tween param 0..1
+  dur: number; // tween duration (seconds)
+  animating: boolean;
+  lastArrive: number; // performance.now() of last arrival (input cooldown)
+};
+
+// Per-transition duration derived from the progress span it covers, clamped —
+// so the long Wave Terrain → Orbital climax naturally takes the longest.
+function snapDurationSec(span: number): number {
+  const { baseMs, minMs, maxMs, refSpan } = EXPERIENCE.snap;
+  const ms = Math.min(
+    maxMs,
+    Math.max(minMs, (baseMs * Math.abs(span)) / refSpan),
+  );
+  return ms / 1000;
+}
+
+// Advances the active snap tween each frame and mirrors it into the shared
+// progress ref. Mounted first inside ProgressProvider so scene consumers read
+// the fresh value the same frame.
+function SnapDriver({ snap }: { snap: MutableRefObject<SnapState> }) {
+  const progress = useExperienceProgress();
+  useFrame((_, delta) => {
+    const s = snap.current;
+    if (s.animating) {
+      s.t = Math.min(s.t + Math.min(delta, 0.05) / s.dur, 1);
+      s.value = lerp(s.from, s.to, easeInOutCubic(s.t));
+      if (s.t >= 1) {
+        s.value = s.to;
+        s.animating = false;
+        s.lastArrive = performance.now();
+      }
+    }
+    progress.current = s.value;
+  });
+  return null;
+}
+
+// The single place per frame where the master progress is read out to DOM:
+// updates the (optional) debug HUD, the white-flash overlay, the hero's one-time
+// load-in, the finale wordmark, and the progress dots. `intro` is a
 // frame-accumulated ease-out 0→1 ramp so the hero text rise plays once.
 function FrameBridge({
   onFrame,
@@ -59,49 +109,45 @@ function FrameBridge({
 }
 
 // Debug-only (#debug): exposes R3F's synchronous `advance()` so a headless tab
-// (where rAF is paused) can force-render a specific scroll offset for
-// screenshot verification. Not mounted in normal use.
-function DebugBridge() {
+// (where rAF is paused) can force-render a specific progress value. It snaps the
+// snap state to that value (no tween) so the scenes render it immediately.
+function DebugBridge({ snap }: { snap: MutableRefObject<SnapState> }) {
   const advance = useThree((s) => s.advance);
-  const scroll = useScroll();
   const progress = useExperienceProgress();
   useEffect(() => {
     (window as unknown as { __exp: { goto(f: number): void } }).__exp = {
       goto(f: number) {
-        const el = scroll.el;
-        el.scrollTop = f * (el.scrollHeight - el.clientHeight);
-        scroll.offset = f;
+        const s = snap.current;
+        s.value = f;
+        s.animating = false;
+        s.t = 1;
+        // Nearest stage (for the dots / logic).
+        let nearest = 0;
+        let best = Infinity;
+        STAGE_TARGETS.forEach((t, i) => {
+          const d = Math.abs(t - f);
+          if (d < best) {
+            best = d;
+            nearest = i;
+          }
+        });
+        s.stage = nearest;
         progress.current = f;
-        const t = performance.now();
-        advance(t + 16.7);
-        advance(t + 33.4);
+        const now = performance.now();
+        advance(now + 16.7);
+        advance(now + 33.4);
       },
     };
-  }, [advance, scroll, progress]);
-  return null;
-}
-
-// Exposes drei's scroll element to the DOM layer so a progress-dot click can
-// drive a smooth native scroll to a stage. (Phase-1 free-scrub navigation; the
-// snap model replaces this in Phase 2.)
-function ScrollElCapture({
-  elRef,
-}: {
-  elRef: MutableRefObject<HTMLElement | null>;
-}) {
-  const scroll = useScroll();
-  useEffect(() => {
-    elRef.current = scroll.el;
-  }, [elRef, scroll]);
+  }, [advance, progress, snap]);
   return null;
 }
 
 export function Experience({ isMobile, reducedMotion }: ExperienceProps) {
   const introEnabled = !reducedMotion;
 
-  // scrub  → scroll-scrubbed WebGL scenes (ScrollControls drives everything)
-  // outro  → triggered, self-playing: SEVYNDAY exits up, platform panel rises
-  // released → pinned experience handed off to normal document scrolling
+  // scrub  → snap-to-section navigation (one gesture = one stage)
+  // outro  → triggered, self-playing finale (SEVYNDAY parks, panel rises)
+  // released → handed off to normal document scrolling
   const [phase, setPhase] = useState<Phase>("scrub");
   const phaseRef = useRef<Phase>("scrub");
   useEffect(() => {
@@ -117,21 +163,92 @@ export function Experience({ isMobile, reducedMotion }: ExperienceProps) {
   const bgRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const overlayRefs = useRef<Record<string, HTMLDivElement | null>>({});
-  const latestP = useRef(0); // latest progress, read by the outro trigger
-  const scrollElRef = useRef<HTMLElement | null>(null);
 
-  // Clicking a progress dot navigates to that stage. Phase 1: a smooth native
-  // scroll of the drei scroll element (which the progress driver follows).
-  // Phase 2 replaces this with the snap controller's goToStage.
-  const onStageClick = useCallback((index: number) => {
-    const el = scrollElRef.current;
-    if (!el) return;
-    const target = PROGRESS_STAGES[index]?.at ?? 0;
-    el.scrollTo({
-      top: target * (el.scrollHeight - el.clientHeight),
-      behavior: "smooth",
-    });
+  // The shared progress ref (written by SnapDriver, read by every scene).
+  const progressRef = useRef(0);
+  // The snap tween state — the source of truth for where we are / heading.
+  const snap = useRef<SnapState>({
+    value: STAGE_TARGETS[0],
+    stage: 0,
+    from: STAGE_TARGETS[0],
+    to: STAGE_TARGETS[0],
+    t: 1,
+    dur: 1,
+    animating: false,
+    lastArrive: 0,
+  });
+
+  // Input is locked while a transition plays, plus a short cooldown after landing
+  // (absorbs trackpad momentum so one flick = exactly one stage).
+  const locked = useCallback(() => {
+    const s = snap.current;
+    return (
+      s.animating ||
+      performance.now() - s.lastArrive < EXPERIENCE.snap.lockMs
+    );
   }, []);
+
+  // Tween progress to a stage target (used by scroll gestures + dot clicks).
+  const goToStage = useCallback((index: number) => {
+    const s = snap.current;
+    const target = Math.max(0, Math.min(N_STAGES - 1, index));
+    if (target === s.stage && !s.animating) return;
+    s.from = s.value;
+    s.to = STAGE_TARGETS[target];
+    s.t = 0;
+    s.dur = snapDurationSec(s.to - s.from);
+    s.animating = true;
+    s.stage = target;
+  }, []);
+
+  const startOutro = useCallback(() => {
+    if (phaseRef.current !== "scrub") return;
+    if (snap.current.animating) return;
+    setPhase("outro");
+  }, []);
+
+  // One gesture = one stage. At orbital, a forward gesture starts the outro.
+  const step = useCallback(
+    (dir: number) => {
+      if (locked()) return;
+      const s = snap.current;
+      if (s.stage >= N_STAGES - 1 && dir > 0) {
+        startOutro();
+        return;
+      }
+      if (s.stage <= 0 && dir < 0) return;
+      goToStage(s.stage + dir);
+    },
+    [locked, goToStage, startOutro],
+  );
+
+  // Re-enter the pinned experience from the normal site (dot click after handoff)
+  // — reset the released chrome and tween to the chosen stage.
+  const reenter = useCallback(
+    (index: number) => {
+      window.scrollTo(0, 0);
+      if (bgRef.current) bgRef.current.style.opacity = "1";
+      setWebglActive(true);
+      goToStage(index);
+      setPhase("scrub");
+    },
+    [goToStage],
+  );
+
+  // Clicking a progress dot navigates to that stage using the SAME smooth tween
+  // as scrolling (never a hard teleport). The Orbital dot plays the whole climax.
+  const onStageClick = useCallback(
+    (index: number) => {
+      if (phaseRef.current === "released") {
+        reenter(index);
+        return;
+      }
+      if (phaseRef.current !== "scrub") return;
+      if (locked()) return;
+      goToStage(index);
+    },
+    [locked, goToStage, reenter],
+  );
 
   const count = isMobile
     ? EXPERIENCE.particles.mobile
@@ -155,42 +272,54 @@ export function Experience({ isMobile, reducedMotion }: ExperienceProps) {
     return () => timers.forEach((t) => window.clearTimeout(t));
   }, []);
 
-  // --- Outro trigger: a scroll-down at the orbital finale starts the outro. ---
-  // Armed only during scrub, only once progress has actually reached the orbital
-  // scene (triggerThreshold), and guarded against double-firing (the listeners
-  // are torn down the instant we leave scrub).
+  // --- Snap gesture input: wheel / keys / swipe. Active only while scrubbing.
+  // Normalized so a mouse-wheel notch and a trackpad flick both = one stage; the
+  // lock (transition + cooldown) prevents a flick skipping stages. Wheel/touch
+  // default is prevented so the page never scrolls under the pinned experience.
   useEffect(() => {
     if (phase !== "scrub") return;
-    const fire = () => {
-      if (phaseRef.current !== "scrub") return;
-      if (latestP.current < EXPERIENCE.outro.triggerThreshold) return;
-      setPhase("outro");
-    };
+    const { wheelThreshold, swipeThreshold } = EXPERIENCE.snap;
+
     const onWheel = (e: WheelEvent) => {
-      if (e.deltaY > 0) fire();
+      e.preventDefault();
+      if (Math.abs(e.deltaY) < wheelThreshold) return;
+      step(e.deltaY > 0 ? 1 : -1);
     };
     const onKey = (e: KeyboardEvent) => {
-      if (["ArrowDown", "PageDown", " ", "Spacebar"].includes(e.key)) fire();
+      if (["ArrowDown", "PageDown", " ", "Spacebar"].includes(e.key)) {
+        e.preventDefault();
+        step(1);
+      } else if (["ArrowUp", "PageUp"].includes(e.key)) {
+        e.preventDefault();
+        step(-1);
+      }
     };
     let touchY = 0;
     const onTouchStart = (e: TouchEvent) => {
       touchY = e.touches[0]?.clientY ?? 0;
     };
     const onTouchMove = (e: TouchEvent) => {
-      const cy = e.touches[0]?.clientY ?? touchY;
-      if (touchY - cy > 8) fire();
+      e.preventDefault(); // stop native scroll / pull-to-refresh
     };
-    window.addEventListener("wheel", onWheel, { passive: true });
+    const onTouchEnd = (e: TouchEvent) => {
+      const endY = e.changedTouches[0]?.clientY ?? touchY;
+      const dy = touchY - endY; // finger up (dy>0) = advance
+      if (Math.abs(dy) > swipeThreshold) step(dy > 0 ? 1 : -1);
+    };
+
+    window.addEventListener("wheel", onWheel, { passive: false });
     window.addEventListener("keydown", onKey);
     window.addEventListener("touchstart", onTouchStart, { passive: true });
-    window.addEventListener("touchmove", onTouchMove, { passive: true });
+    window.addEventListener("touchmove", onTouchMove, { passive: false });
+    window.addEventListener("touchend", onTouchEnd, { passive: true });
     return () => {
       window.removeEventListener("wheel", onWheel);
       window.removeEventListener("keydown", onKey);
       window.removeEventListener("touchstart", onTouchStart);
       window.removeEventListener("touchmove", onTouchMove);
+      window.removeEventListener("touchend", onTouchEnd);
     };
-  }, [phase]);
+  }, [phase, step]);
 
   // --- Outro self-play → release. The wordmark/panel transforms are CSS
   // transitions driven by `phase` in JSX; here we just release after the longer
@@ -203,8 +332,8 @@ export function Experience({ isMobile, reducedMotion }: ExperienceProps) {
     return () => window.clearTimeout(t);
   }, [phase]);
 
-  // --- Body scroll: locked while pinned (scrub/outro) so only ScrollControls
-  // scrubs; unlocked on release so the document scrolls normally. ---
+  // --- Body scroll: locked while pinned (scrub/outro) so only the snap model
+  // drives the experience; unlocked on release so the document scrolls normally.
   useEffect(() => {
     const lock = phase !== "released";
     document.documentElement.style.overflow = lock ? "hidden" : "";
@@ -232,7 +361,6 @@ export function Experience({ isMobile, reducedMotion }: ExperienceProps) {
 
   const handleFrame = useCallback(
     (p: number, intro: number) => {
-      latestP.current = p;
       const heroIntro = introEnabled ? intro : 1;
 
       const { range, peak } = EXPERIENCE.flash;
@@ -319,7 +447,7 @@ export function Experience({ isMobile, reducedMotion }: ExperienceProps) {
         const scene =
           SCENES.find((s) => p >= s.range[0] && p <= s.range[1])?.label ??
           "— transition —";
-        hud.textContent = `p ${p.toFixed(2)}  ·  ${scene}  ·  ${phaseRef.current}`;
+        hud.textContent = `p ${p.toFixed(2)}  ·  ${scene}  ·  ${phaseRef.current}  ·  s${snap.current.stage}`;
       }
     },
     [introEnabled],
@@ -332,15 +460,12 @@ export function Experience({ isMobile, reducedMotion }: ExperienceProps) {
       data-mobile={isMobile}
       style={{ backgroundColor: EXPERIENCE.background }}
     >
-      {/* WebGL background — fixed; fades out + pauses after release. Interactive
-          (for ScrollControls) only while scrubbing. */}
+      {/* WebGL background — fixed; fades out + pauses after release. Purely a
+          background (gestures are window listeners), so it never intercepts. */}
       <div
         ref={bgRef}
-        className="fixed inset-0 z-0"
-        style={{
-          backgroundColor: EXPERIENCE.background,
-          pointerEvents: phase === "scrub" ? "auto" : "none",
-        }}
+        className="pointer-events-none fixed inset-0 z-0"
+        style={{ backgroundColor: EXPERIENCE.background }}
       >
         <Canvas
           flat
@@ -356,25 +481,21 @@ export function Experience({ isMobile, reducedMotion }: ExperienceProps) {
           camera={{ position: [0, 0, 5.4], fov: 45, near: 0.1, far: 100 }}
           onCreated={({ gl }) => gl.setClearColor(EXPERIENCE.background, 1)}
         >
-          <ScrollControls
-            enabled={phase === "scrub"}
-            pages={EXPERIENCE.pages}
-            damping={EXPERIENCE.damping}
-          >
-            <ProgressProvider>
-              <ParticleField
-                count={count}
-                sizeBase={isMobile ? 20 : 16}
-                intro={introEnabled}
-              />
-              <SceneExtras />
-              <CameraRig />
-              <FrameBridge onFrame={handleFrame} />
-              <ScrollElCapture elRef={scrollElRef} />
-              {debug && <DebugBridge />}
-              <Effects isMobile={isMobile} />
-            </ProgressProvider>
-          </ScrollControls>
+          <ProgressProvider progress={progressRef}>
+            {/* SnapDriver first: writes progress from the snap tween before
+                any consumer reads it this frame. */}
+            <SnapDriver snap={snap} />
+            <ParticleField
+              count={count}
+              sizeBase={isMobile ? 20 : 16}
+              intro={introEnabled}
+            />
+            <SceneExtras />
+            <CameraRig />
+            <FrameBridge onFrame={handleFrame} />
+            {debug && <DebugBridge snap={snap} />}
+            <Effects isMobile={isMobile} />
+          </ProgressProvider>
         </Canvas>
       </div>
 
