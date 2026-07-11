@@ -123,7 +123,12 @@ Almost everything lives in **`src/config/experience.ts`**:
   `range`, and gradient `colorA`/`colorB`. Edit copy and colors here.
 - **`HOLD_ZONES`** — where each shape holds vs. morphs (pacing).
 - **`EXPERIENCE`** — `pages`, `damping`, `background`, `dpr`, `particles` (desktop/mobile
-  counts), `palette`, and `flash` (range + peak).
+  counts), `palette`, `flash` (range + peak), and `outro` (finale trigger + timings).
+- **`PROGRESS_STAGES` / `PROGRESS_DOTS`** — the right-edge scroll-progress indicator:
+  the six CONTENT stages (name + anchor `at` p) and the dot styling (colors, size,
+  gap, active scale, glow). The active dot is driven per frame in `handleFrame`
+  (`stage-*` keys) and eases between dots across transitions; it's an additive
+  overlay only (`ProgressDots.tsx`) that fades out on the finale handoff.
 
 Other tunables:
 

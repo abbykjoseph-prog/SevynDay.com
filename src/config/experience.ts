@@ -265,6 +265,31 @@ export const FUNNEL_STYLE = { startX: -80, glide: 180, fontSizePx: 42 };
 export const STARFIELD_STATEMENT =
   "Every absence, accounted for. Every decision, defensible.";
 
+// Scroll-progress indicator: ONE dot per CONTENT stage (six). Transition scenes
+// (funnel-dissolve gaps, gravity well) and the white flash are NOT their own
+// dots — they belong to the transition between stages, so the active highlight
+// eases from one dot to the next across them. `at` is the progress p that
+// represents each stage; the active dot is the one `p` is nearest.
+export const PROGRESS_STAGES: { id: string; name: string; at: number }[] = [
+  { id: "sphere", name: "Hero", at: 0.03 },
+  { id: "funnel", name: "Funnel", at: 0.165 },
+  { id: "helix", name: "Helix", at: 0.3 },
+  { id: "starfield", name: "Starfield", at: 0.435 },
+  { id: "terrain", name: "Wave Terrain", at: 0.58 },
+  { id: "orbital", name: "Orbital", at: 0.92 },
+];
+
+// Dot styling for the progress indicator. Minimal/premium: dim white inactive,
+// electric-blue active with a soft glow. Tune sizes/spacing/scale/colors here.
+export const PROGRESS_DOTS = {
+  activeColor: "#2ea8ff",
+  inactiveColor: "rgba(210,220,235,0.32)",
+  glow: "0 0 9px 2px rgba(46,168,255,0.7)", // active-dot glow (electric blue)
+  sizePx: 7, // dot diameter (desktop; mobile shrinks)
+  gapPx: 18, // vertical spacing between dots (desktop; mobile shrinks)
+  activeScale: 1.5, // active dot is this much larger
+};
+
 // Convenience lookups.
 export const SCENE_BY_ID = Object.fromEntries(
   SCENES.map((s) => [s.id, s]),

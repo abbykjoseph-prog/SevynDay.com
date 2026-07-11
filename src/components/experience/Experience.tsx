@@ -3,7 +3,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { ScrollControls, useScroll } from "@react-three/drei";
-import { EXPERIENCE, FUNNEL_STYLE, SCENES } from "@/config/experience";
+import {
+  EXPERIENCE,
+  FUNNEL_STYLE,
+  PROGRESS_DOTS,
+  PROGRESS_STAGES,
+  SCENES,
+} from "@/config/experience";
 import {
   clamp01,
   easeOutCubic,
@@ -17,6 +23,7 @@ import { CameraRig } from "./CameraRig";
 import { Effects } from "./Effects";
 import { SceneExtras } from "./SceneExtras";
 import { Overlay, CONTENT_SCENES } from "./Overlay";
+import { ProgressDots } from "./ProgressDots";
 import { PlatformPanel, PlaceholderSections } from "./SiteSections";
 import { ProgressProvider, useExperienceProgress } from "./progressDrive";
 
@@ -244,6 +251,30 @@ export function Experience({ isMobile, reducedMotion }: ExperienceProps) {
         if (wm) wm.style.opacity = String(smoothstep(range01(p, 0.9, 0.95)));
       }
 
+      // Progress dots: highlight the current CONTENT stage. `stageF` is a
+      // fractional stage index (eased between the stage anchors), so the
+      // highlight glides from one dot to the next across transition scenes.
+      let stageF = PROGRESS_STAGES.length - 1;
+      if (p <= PROGRESS_STAGES[0].at) {
+        stageF = 0;
+      } else {
+        for (let i = 0; i < PROGRESS_STAGES.length - 1; i++) {
+          if (p < PROGRESS_STAGES[i + 1].at) {
+            const span = PROGRESS_STAGES[i + 1].at - PROGRESS_STAGES[i].at;
+            stageF = i + smoothstep((p - PROGRESS_STAGES[i].at) / span);
+            break;
+          }
+        }
+      }
+      for (let i = 0; i < PROGRESS_STAGES.length; i++) {
+        const el = overlayRefs.current[`stage-${i}`];
+        if (!el) continue;
+        const a = clamp01(1 - Math.abs(i - stageF)); // this dot's activeness
+        el.style.transform = `scale(${(1 + (PROGRESS_DOTS.activeScale - 1) * a).toFixed(3)})`;
+        const active = el.querySelector<HTMLElement>("[data-active]");
+        if (active) active.style.opacity = a.toFixed(3);
+      }
+
       const hint = scrollHintRef.current;
       if (hint) hint.style.opacity = String(1 - range01(p, 0.01, 0.06));
 
@@ -355,6 +386,13 @@ export function Experience({ isMobile, reducedMotion }: ExperienceProps) {
           >
             scroll
           </div>
+
+          {/* Scroll-progress dots — right edge; fade out as the finale hands off. */}
+          <ProgressDots
+            blockRefs={overlayRefs}
+            isMobile={isMobile}
+            visible={phase === "scrub"}
+          />
         </>
       )}
 
