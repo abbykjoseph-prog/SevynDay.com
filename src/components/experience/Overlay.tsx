@@ -141,7 +141,7 @@ function FunnelLabelsOverlay({
   blockRefs: MutableRefObject<Record<string, HTMLDivElement | null>>;
 }) {
   return (
-    <div className="absolute left-1/2 top-[15%] flex -translate-x-1/2 flex-col items-center gap-4 text-center">
+    <div className="absolute left-1/2 top-[13%] flex -translate-x-1/2 flex-col items-center gap-6 text-center sm:gap-7">
       {FUNNEL_LABELS.map((label, i) => (
         <div
           key={label.text}
@@ -156,18 +156,20 @@ function FunnelLabelsOverlay({
             aria-hidden
             className="pointer-events-none absolute left-1/2 top-1/2 -z-10 -translate-x-1/2 -translate-y-1/2"
             style={{
-              width: "150%",
-              height: "300%",
+              width: "160%",
+              height: "320%",
               background:
-                "radial-gradient(ellipse at center, rgba(4,6,12,0.55) 0%, rgba(4,6,12,0.3) 42%, rgba(4,6,12,0) 72%)",
+                "radial-gradient(ellipse at center, rgba(4,6,12,0.5) 0%, rgba(4,6,12,0.26) 44%, rgba(4,6,12,0) 72%)",
             }}
           />
+          {/* letter-spacing + text-shadow (glow/shimmer) are driven per frame in
+              handleFrame for the power-on entrance; these are the resting values. */}
           <span
-            className="font-display text-base font-medium tracking-tight sm:text-lg"
+            className="font-display text-2xl font-semibold tracking-tight sm:text-3xl"
             style={{
               color: "#f4f7fb",
               textShadow:
-                "0 1px 10px rgba(4,6,12,0.95), 0 0 24px rgba(4,6,12,0.7)",
+                "0 0 2px rgba(255,255,255,0.9), 0 0 12px rgba(46,168,255,0.8), 0 0 30px rgba(46,168,255,0.45), 0 1px 10px rgba(4,6,12,0.92)",
             }}
           >
             {label.text}
