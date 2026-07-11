@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { ScrollControls, useScroll } from "@react-three/drei";
 import { EXPERIENCE, SCENES } from "@/config/experience";
-import { pulse, range01, smoothstep } from "./math";
+import { easeOutCubic, pulse, range01, smoothstep } from "./math";
 import { ParticleField } from "./ParticleField";
 import { CameraRig } from "./CameraRig";
 import { Effects } from "./Effects";
@@ -12,17 +12,26 @@ import { SceneExtras } from "./SceneExtras";
 import { Overlay, CONTENT_SCENES } from "./Overlay";
 import { ProgressProvider, useExperienceProgress } from "./progressDrive";
 
-type ExperienceProps = { isMobile: boolean };
+type ExperienceProps = { isMobile: boolean; reducedMotion: boolean };
 
 // The single place per frame where the master scroll offset is read out to DOM:
-// updates the (optional) debug HUD and the fullscreen white-flash overlay.
+// updates the (optional) debug HUD, the fullscreen white-flash overlay, and the
+// hero's one-time load-in. `intro` is a frame-accumulated ease-out 0→1 ramp so
+// the hero text rise plays once on load and is never reset by scroll.
 function FrameBridge({
   onFrame,
 }: {
-  onFrame: (p: number) => void;
+  onFrame: (p: number, intro: number) => void;
 }) {
   const progress = useExperienceProgress();
-  useFrame(() => onFrame(progress.current));
+  const introT = useRef(0);
+  useFrame((_, delta) => {
+    introT.current = Math.min(
+      introT.current + Math.min(delta, 0.05) / EXPERIENCE.intro.seconds,
+      1,
+    );
+    onFrame(progress.current, easeOutCubic(introT.current));
+  });
   return null;
 }
 
@@ -52,7 +61,12 @@ function DebugBridge() {
   return null;
 }
 
-export function Experience({ isMobile }: ExperienceProps) {
+export function Experience({ isMobile, reducedMotion }: ExperienceProps) {
+  // Reduced motion → skip the load-in gather + text rise (formed sphere and text
+  // shown directly). In practice reduced-motion users render ReducedExperience
+  // upstream instead of this component; this keeps the intro correct regardless.
+  const introEnabled = !reducedMotion;
+
   const hudRef = useRef<HTMLDivElement>(null);
   const flashRef = useRef<HTMLDivElement>(null);
   const scrollHintRef = useRef<HTMLDivElement>(null);
@@ -85,46 +99,56 @@ export function Experience({ isMobile }: ExperienceProps) {
     return () => timers.forEach((t) => window.clearTimeout(t));
   }, []);
 
-  const handleFrame = useCallback((p: number) => {
-    const { range, peak } = EXPERIENCE.flash;
-    const flash = flashRef.current;
-    if (flash) {
-      flash.style.opacity = String(
-        Math.min(1, pulse(p, range[0], range[1], peak) * 1.12),
-      );
-    }
+  const handleFrame = useCallback(
+    (p: number, intro: number) => {
+      // heroIntro eases 0→1 once on load; forced to 1 when the intro is disabled.
+      const heroIntro = introEnabled ? intro : 1;
 
-    // Cross-fade each anchor scene's content over its scroll range. Scenes that
-    // touch the very top/bottom hold their edge (no fade-in at 0 / fade-out at 1).
-    const m = 0.035;
-    for (const scene of CONTENT_SCENES) {
-      const el = overlayRefs.current[scene.id];
-      if (!el) continue;
-      const [a, b] = scene.range;
-      const fadeIn = a <= 0.001 ? 1 : range01(p, a, a + m);
-      const fadeOut = b >= 0.999 ? 1 : 1 - range01(p, b - m, b);
-      const fade = smoothstep(Math.min(fadeIn, fadeOut));
-      el.style.opacity = String(fade);
-      el.style.transform = `translateY(${(1 - fade) * 22}px)`;
-      // The block itself stays click-through (inherits pointer-events:none from
-      // the overlay root) so the wheel reaches the scroll controller. Only the
-      // button wrapper becomes interactive, and only while the scene is visible.
-      const cta = el.querySelector<HTMLElement>("[data-cta]");
-      if (cta) cta.style.pointerEvents = fade > 0.6 ? "auto" : "none";
-    }
+      const { range, peak } = EXPERIENCE.flash;
+      const flash = flashRef.current;
+      if (flash) {
+        flash.style.opacity = String(
+          Math.min(1, pulse(p, range[0], range[1], peak) * 1.12),
+        );
+      }
 
-    // The scroll hint fades out once the user leaves the hero.
-    const hint = scrollHintRef.current;
-    if (hint) hint.style.opacity = String(1 - range01(p, 0.01, 0.06));
+      // Cross-fade each anchor scene's content over its scroll range. Scenes that
+      // touch the very top/bottom hold their edge (no fade-in at 0 / out at 1).
+      const m = 0.035;
+      for (const scene of CONTENT_SCENES) {
+        const el = overlayRefs.current[scene.id];
+        if (!el) continue;
+        const [a, b] = scene.range;
+        const fadeIn = a <= 0.001 ? 1 : range01(p, a, a + m);
+        const fadeOut = b >= 0.999 ? 1 : 1 - range01(p, b - m, b);
+        const fade = smoothstep(Math.min(fadeIn, fadeOut));
+        // The hero additionally plays the one-time load-in: fade + a soft rise
+        // (~risePx), in step with the particle gather.
+        const isHero = scene.id === "sphere";
+        const rise = isHero ? (1 - heroIntro) * EXPERIENCE.intro.risePx : 0;
+        el.style.opacity = String(isHero ? fade * heroIntro : fade);
+        el.style.transform = `translateY(${(1 - fade) * 22 + rise}px)`;
+        // The block itself stays click-through (inherits pointer-events:none from
+        // the overlay root) so the wheel reaches the scroll controller. Only the
+        // button wrapper becomes interactive, and only while the scene is visible.
+        const cta = el.querySelector<HTMLElement>("[data-cta]");
+        if (cta) cta.style.pointerEvents = fade > 0.6 ? "auto" : "none";
+      }
 
-    const hud = hudRef.current;
-    if (hud) {
-      const scene =
-        SCENES.find((s) => p >= s.range[0] && p <= s.range[1])?.label ??
-        "— transition —";
-      hud.textContent = `p ${p.toFixed(2)}  ·  ${scene}`;
-    }
-  }, []);
+      // The scroll hint fades out once the user leaves the hero.
+      const hint = scrollHintRef.current;
+      if (hint) hint.style.opacity = String(1 - range01(p, 0.01, 0.06));
+
+      const hud = hudRef.current;
+      if (hud) {
+        const scene =
+          SCENES.find((s) => p >= s.range[0] && p <= s.range[1])?.label ??
+          "— transition —";
+        hud.textContent = `p ${p.toFixed(2)}  ·  ${scene}`;
+      }
+    },
+    [introEnabled],
+  );
 
   return (
     <div
@@ -148,7 +172,11 @@ export function Experience({ isMobile }: ExperienceProps) {
           {/* ProgressProvider mounts its driver first, then feeds one smoothed,
               rate-limited progress value to every scene below. */}
           <ProgressProvider>
-            <ParticleField count={count} sizeBase={isMobile ? 20 : 16} />
+            <ParticleField
+              count={count}
+              sizeBase={isMobile ? 20 : 16}
+              intro={introEnabled}
+            />
             <SceneExtras />
             <CameraRig />
             <FrameBridge onFrame={handleFrame} />

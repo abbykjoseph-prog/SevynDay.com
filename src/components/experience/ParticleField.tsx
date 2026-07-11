@@ -6,7 +6,7 @@ import * as THREE from "three";
 import { EXPERIENCE, SCENES } from "@/config/experience";
 import { buildParticleBuffers } from "./shapes";
 import { resolveSegment } from "./progress";
-import { lerp, windowFade } from "./math";
+import { easeOutCubic, lerp, windowFade } from "./math";
 import { useExperienceProgress } from "./progressDrive";
 
 // Per-scene spin rate (rad/s). Zero where a still frame reads better
@@ -31,17 +31,21 @@ const VERT = /* glsl */ `
   uniform float uWaveAmt;
   uniform float uStarAmt;
   uniform float uStarPhase;
+  uniform float uIntro;
   attribute vec3 aPositionFrom;
   attribute vec3 aPositionTo;
   attribute vec3 aColorFrom;
   attribute vec3 aColorTo;
+  attribute vec3 aScatter;
   attribute float aSize;
   attribute float aSeed;
   varying vec3 vColor;
   varying float vTwinkle;
 
   void main() {
-    vec3 pos = mix(aPositionFrom, aPositionTo, uMix);
+    // Load-in gather: scattered start positions → the formed shape (uIntro 0→1).
+    vec3 formed = mix(aPositionFrom, aPositionTo, uMix);
+    vec3 pos = mix(aScatter, formed, uIntro);
 
     // Wave-terrain ripple (only active while uWaveAmt > 0).
     pos.y += sin(pos.x * 1.3 + uTime * 0.9) * cos(pos.z * 1.1 + uTime * 0.6)
@@ -78,19 +82,46 @@ const FRAG = /* glsl */ `
   }
 `;
 
-type ParticleFieldProps = { count: number; sizeBase?: number };
+type ParticleFieldProps = {
+  count: number;
+  sizeBase?: number;
+  /** Play the one-time load-in gather. Set false to show the formed shape
+   *  immediately (e.g. prefers-reduced-motion). */
+  intro?: boolean;
+};
 
-export function ParticleField({ count, sizeBase = 16 }: ParticleFieldProps) {
+export function ParticleField({
+  count,
+  sizeBase = 16,
+  intro = true,
+}: ParticleFieldProps) {
   const pointsRef = useRef<THREE.Points>(null);
   const progress = useExperienceProgress();
   const lastFrom = useRef(-1);
   const lastTo = useRef(-1);
   const starPhase = useRef(0);
+  const introT = useRef(0); // 0→1 load-in clock (frame-accumulated, once)
 
   const buffers = useMemo(
     () => buildParticleBuffers(count, SCENES),
     [count],
   );
+
+  // Random start positions for the load-in gather (a scattered cloud that
+  // converges to the formed sphere). Wider than the ~1.6 sphere and biased away
+  // from the camera so no point spawns on top of it.
+  const scatter = useMemo(() => {
+    const arr = new Float32Array(count * 3);
+    for (let i = 0; i < count; i++) {
+      const theta = Math.random() * Math.PI * 2;
+      const phi = Math.acos(2 * Math.random() - 1);
+      const r = 2.6 + Math.random() * 2.2;
+      arr[i * 3] = r * Math.sin(phi) * Math.cos(theta);
+      arr[i * 3 + 1] = r * Math.sin(phi) * Math.sin(theta);
+      arr[i * 3 + 2] = r * Math.cos(phi) - 1.2;
+    }
+    return arr;
+  }, [count]);
 
   // One persistent BufferAttribute per shape, created ONCE. Reusing these exact
   // objects when the active shapes change lets three keep every buffer
@@ -116,6 +147,7 @@ export function ParticleField({ count, sizeBase = 16 }: ParticleFieldProps) {
     g.setAttribute("aColorTo", a1.col);
     g.setAttribute("aSize", new THREE.BufferAttribute(buffers.size, 1));
     g.setAttribute("aSeed", new THREE.BufferAttribute(buffers.seed, 1));
+    g.setAttribute("aScatter", new THREE.BufferAttribute(scatter, 3));
     // `position` is required by three even though the shader ignores it.
     g.setAttribute(
       "position",
@@ -123,7 +155,7 @@ export function ParticleField({ count, sizeBase = 16 }: ParticleFieldProps) {
     );
     g.boundingSphere = new THREE.Sphere(new THREE.Vector3(), 12);
     return g;
-  }, [shapeAttrs, buffers]);
+  }, [shapeAttrs, buffers, scatter]);
 
   const material = useMemo(() => {
     return new THREE.ShaderMaterial({
@@ -140,6 +172,7 @@ export function ParticleField({ count, sizeBase = 16 }: ParticleFieldProps) {
         uWaveAmt: { value: 0 },
         uStarAmt: { value: 0 },
         uStarPhase: { value: 0 },
+        uIntro: { value: 0 }, // 0 = fully scattered; ramps to 1 on load
         uOpacity: { value: 1 },
       },
       vertexShader: VERT,
@@ -181,6 +214,18 @@ export function ParticleField({ count, sizeBase = 16 }: ParticleFieldProps) {
     const u = material.uniforms;
     u.uTime.value += dt;
     u.uMix.value = seg.mix;
+
+    // One-time load-in gather: ease-out ramp 0→1 over EXPERIENCE.intro.seconds,
+    // frame-accumulated so it plays once on load and is never reset by scroll.
+    if (intro) {
+      introT.current = Math.min(
+        introT.current + dt / EXPERIENCE.intro.seconds,
+        1,
+      );
+      u.uIntro.value = easeOutCubic(introT.current);
+    } else {
+      u.uIntro.value = 1; // reduced-motion / disabled: formed immediately
+    }
 
     const waveAmt = windowFade(p, 0.46, 0.68, 0.04);
     const starAmt = windowFade(p, 0.36, 0.52, 0.04);

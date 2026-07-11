@@ -41,5 +41,5 @@ export function ExperienceClient() {
     return <ReducedExperience />;
   }
 
-  return <Experience isMobile={isMobile} />;
+  return <Experience isMobile={isMobile} reducedMotion={reducedMotion} />;
 }

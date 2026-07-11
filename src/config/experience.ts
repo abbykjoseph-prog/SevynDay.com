@@ -68,6 +68,10 @@ export const EXPERIENCE = {
    *   - maxSpeed: hard ceiling on progress units/sec, so a scrollbar slam or fast
    *     flick animates as a smooth catch-up instead of a jump. */
   scroll: { smooth: 4, maxSpeed: 0.18 },
+  /** One-time load-in for the hero: particles gather from scattered → formed and
+   *  the hero text fades + rises `risePx`, over `seconds` with ease-out. Plays
+   *  once on load (time-based from mount), never re-triggered by scroll. */
+  intro: { seconds: 1.2, risePx: 16 },
   background: "#04060c",
   /** device-pixel-ratio clamp for the Canvas */
   dpr: [1, 1.75] as [number, number],

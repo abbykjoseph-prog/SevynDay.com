@@ -11,6 +11,12 @@ export const smoothstep = (t: number) => {
   return x * x * (3 - 2 * x);
 };
 
+/** Ease-out cubic on 0..1 — fast start, gentle settle. */
+export const easeOutCubic = (t: number) => {
+  const x = clamp01(t);
+  return 1 - Math.pow(1 - x, 3);
+};
+
 /** Remap x from [a,b] to [0,1], clamped. */
 export const range01 = (x: number, a: number, b: number) =>
   clamp01((x - a) / (b - a || 1));
