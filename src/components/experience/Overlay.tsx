@@ -2,7 +2,12 @@
 
 import Link from "next/link";
 import type { MutableRefObject } from "react";
-import { SCENES, STARFIELD_STATEMENT, type SceneDef } from "@/config/experience";
+import {
+  FUNNEL_LABELS,
+  SCENES,
+  STARFIELD_STATEMENT,
+  type SceneDef,
+} from "@/config/experience";
 
 // The HTML content layer for the anchor scenes (sphere, helix, terrain,
 // orbital). Rendered as a fixed layer above the Canvas; each block's opacity /
@@ -125,6 +130,43 @@ function CopyBlock({ scene }: { scene: SceneDef }) {
   );
 }
 
+// Funnel scene: three flat overlay labels in a stair-step from upper-right down
+// to lower-center, hugging the funnel's converging shape. Opacity / rise / drift
+// are driven per frame in handleFrame (keys `funnel-0..2`); positions here.
+const FUNNEL_POS = [
+  { top: "16%", left: "58%" }, // Instant Adjudication (upper-right)
+  { top: "42%", left: "49%" }, // Forensic Papertrail (middle)
+  { top: "67%", left: "40%" }, // Effortless Caseload (lower-center)
+];
+
+function FunnelLabelsOverlay({
+  blockRefs,
+}: {
+  blockRefs: MutableRefObject<Record<string, HTMLDivElement | null>>;
+}) {
+  return (
+    <>
+      {FUNNEL_LABELS.map((label, i) => (
+        <div
+          key={label.text}
+          ref={(el) => {
+            blockRefs.current[`funnel-${i}`] = el;
+          }}
+          className="absolute will-change-[opacity,transform]"
+          style={{ top: FUNNEL_POS[i].top, left: FUNNEL_POS[i].left, opacity: 0 }}
+        >
+          <span
+            className="font-display text-base font-medium tracking-tight text-white/90 sm:text-lg"
+            style={{ textShadow: "0 2px 24px rgba(4,6,12,0.9)" }}
+          >
+            {label.text}
+          </span>
+        </div>
+      ))}
+    </>
+  );
+}
+
 // Starfield scene: one large, blocky, glowing statement, centered. Opacity (and
 // a subtle scale) driven per frame in handleFrame (key `starfield`).
 function StarfieldStatement({
@@ -160,6 +202,7 @@ export function Overlay({
 }) {
   return (
     <div className="pointer-events-none fixed inset-0 z-[52]">
+      <FunnelLabelsOverlay blockRefs={blockRefs} />
       <StarfieldStatement blockRefs={blockRefs} />
       {CONTENT_SCENES.map((scene) => {
         const centered = scene.copy?.align === "center";

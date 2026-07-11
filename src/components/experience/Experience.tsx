@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { ScrollControls, useScroll } from "@react-three/drei";
-import { EXPERIENCE, SCENES } from "@/config/experience";
+import { EXPERIENCE, FUNNEL_LABELS, SCENES } from "@/config/experience";
 import {
   easeOutCubic,
   pulse,
@@ -15,7 +15,6 @@ import { ParticleField } from "./ParticleField";
 import { CameraRig } from "./CameraRig";
 import { Effects } from "./Effects";
 import { SceneExtras } from "./SceneExtras";
-import { FunnelLabels } from "./FunnelLabels";
 import { Overlay, CONTENT_SCENES } from "./Overlay";
 import { ProgressProvider, useExperienceProgress } from "./progressDrive";
 
@@ -28,16 +27,16 @@ type ExperienceProps = { isMobile: boolean; reducedMotion: boolean };
 function FrameBridge({
   onFrame,
 }: {
-  onFrame: (p: number, intro: number) => void;
+  onFrame: (p: number, intro: number, time: number) => void;
 }) {
   const progress = useExperienceProgress();
   const introT = useRef(0);
+  const time = useRef(0);
   useFrame((_, delta) => {
-    introT.current = Math.min(
-      introT.current + Math.min(delta, 0.05) / EXPERIENCE.intro.seconds,
-      1,
-    );
-    onFrame(progress.current, easeOutCubic(introT.current));
+    const dt = Math.min(delta, 0.05);
+    introT.current = Math.min(introT.current + dt / EXPERIENCE.intro.seconds, 1);
+    time.current += dt; // frame-accumulated seconds, for the funnel labels' drift
+    onFrame(progress.current, easeOutCubic(introT.current), time.current);
   });
   return null;
 }
@@ -107,7 +106,7 @@ export function Experience({ isMobile, reducedMotion }: ExperienceProps) {
   }, []);
 
   const handleFrame = useCallback(
-    (p: number, intro: number) => {
+    (p: number, intro: number, time: number) => {
       // heroIntro eases 0→1 once on load; forced to 1 when the intro is disabled.
       const heroIntro = introEnabled ? intro : 1;
 
@@ -140,6 +139,24 @@ export function Experience({ isMobile, reducedMotion }: ExperienceProps) {
         // button wrapper becomes interactive, and only while the scene is visible.
         const cta = el.querySelector<HTMLElement>("[data-cta]");
         if (cta) cta.style.pointerEvents = fade > 0.6 ? "auto" : "none";
+      }
+
+      // Funnel scene: reveal the three flat labels SEQUENTIALLY by scroll (each
+      // fully in at its config `reveal` p), fading + rising ~12px, plus a very
+      // subtle continuous drift so they feel alive (translate only — no rotate).
+      // All fade out together as the exit transition begins (~0.175–0.215).
+      const funnelOut = 1 - range01(p, 0.175, 0.215);
+      for (let i = 0; i < FUNNEL_LABELS.length; i++) {
+        const el = overlayRefs.current[`funnel-${i}`];
+        if (!el) continue;
+        const reveal = FUNNEL_LABELS[i].reveal;
+        const fadeIn = smoothstep(range01(p, reveal - 0.02, reveal));
+        const op = Math.min(fadeIn, smoothstep(funnelOut));
+        const rise = (1 - fadeIn) * 12; // soft upward rise as it comes in
+        const driftX = Math.sin(time * 0.6 + i * 2.1) * 4;
+        const driftY = Math.cos(time * 0.5 + i * 2.1) * 3;
+        el.style.opacity = String(op);
+        el.style.transform = `translate(${driftX}px, ${rise + driftY}px)`;
       }
 
       // Starfield scene: the centered statement fades in as the scene enters and
@@ -194,7 +211,6 @@ export function Experience({ isMobile, reducedMotion }: ExperienceProps) {
               intro={introEnabled}
             />
             <SceneExtras />
-            <FunnelLabels />
             <CameraRig />
             <FrameBridge onFrame={handleFrame} />
             {debug && <DebugBridge />}

@@ -231,12 +231,14 @@ export const SCROLL_RESISTANCE: Record<SceneId, number> = {
 // CopyBlock). Text lives here; layout/timing/drift live in Overlay.tsx +
 // Experience's frame loop.
 //
-// Funnel: three labels in a top-left → bottom-right stair-step that loosely wrap
-// the rotating funnel (staggered reveal + subtle parallax drift).
-export const FUNNEL_BLOCKS = [
-  "Instant Adjudication",
-  "Forensic Papertrail",
-  "Effortless Caseload",
+// Funnel: three flat overlay labels revealed SEQUENTIALLY as scroll advances
+// through the funnel scene. `reveal` is the scroll offset p at which each label
+// is fully in — it fades + rises just before that point. Tune these to re-time
+// the sequence. (They fade out together as the exit transition begins, ~0.175.)
+export const FUNNEL_LABELS: { text: string; reveal: number }[] = [
+  { text: "Instant Adjudication", reveal: 0.16 },
+  { text: "Forensic Papertrail", reveal: 0.165 },
+  { text: "Effortless Caseload", reveal: 0.17 },
 ];
 // Starfield: one large, glowing, centered statement that fades in/out with the
 // scene.
