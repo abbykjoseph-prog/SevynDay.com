@@ -195,7 +195,7 @@ export const SCENES: SceneDef[] = [
 // Keep these ordered and non-overlapping. Content `range`s above should sit
 // inside the matching hold so copy shows while the shape is settled.
 export const HOLD_ZONES: Record<SceneId, [number, number]> = {
-  sphere: [0.0, 0.055],
+  sphere: [0.0, 0.02], // hero starts dispersing almost immediately on scroll
   funnel: [0.155, 0.175],
   helix: [0.27, 0.33],
   starfield: [0.42, 0.45],
