@@ -12,6 +12,7 @@ import { useScroll } from "@react-three/drei";
 import * as THREE from "three";
 import { EXPERIENCE } from "@/config/experience";
 import { clamp01 } from "./math";
+import { resolveResistance } from "./progress";
 
 // The ONE progress value every scene animation reads. It is a smoothed,
 // speed-capped follow of drei's `scroll.offset`:
@@ -46,8 +47,13 @@ function ProgressDriver({
     const target = clamp01(scroll.offset);
     const { smooth, maxSpeed } = EXPERIENCE.scroll;
 
+    // Per-scene resistance scales ONLY the speed cap (base `smooth` is untouched).
+    // Selected by where we currently are and eased across scene boundaries, so
+    // content scenes feel heavier and transitions lighter without any snap.
+    const resistance = resolveResistance(progress.current);
+
     let next = THREE.MathUtils.damp(progress.current, target, smooth, dt);
-    const maxStep = maxSpeed * dt;
+    const maxStep = maxSpeed * resistance * dt;
     next =
       progress.current +
       THREE.MathUtils.clamp(next - progress.current, -maxStep, maxStep);

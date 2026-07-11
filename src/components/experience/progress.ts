@@ -6,8 +6,8 @@
 // only in the gaps between consecutive holds. This makes anchor scenes dwell on
 // their shape while their content is on screen, instead of continuously drifting.
 
-import { SCENES, HOLD_ZONES } from "@/config/experience";
-import { smoothstep } from "./math";
+import { SCENES, HOLD_ZONES, SCROLL_RESISTANCE } from "@/config/experience";
+import { lerp, smoothstep } from "./math";
 
 export interface Segment {
   from: number; // index of the shape we're leaving (or resting on)
@@ -33,4 +33,14 @@ export function resolveSegment(p: number): Segment {
   }
   // Past the last hold → rest on the final shape.
   return { from: N - 1, to: N - 1, mix: 1, raw: 1 };
+}
+
+const RESISTANCE = SCENES.map((s) => SCROLL_RESISTANCE[s.id]);
+
+// The active scene's scroll-resistance multiplier at progress `p`, eased across
+// scene boundaries using the same segment blend as the shapes/camera (so it
+// tracks the visual transition and never snaps). 1 = neutral.
+export function resolveResistance(p: number): number {
+  const seg = resolveSegment(p);
+  return lerp(RESISTANCE[seg.from], RESISTANCE[seg.to] ?? RESISTANCE[seg.from], seg.mix);
 }

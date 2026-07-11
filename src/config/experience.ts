@@ -213,6 +213,24 @@ export const HOLD_ZONES: Record<SceneId, [number, number]> = {
   orbital: [0.905, 1.0],
 };
 
+// Per-scene scroll "resistance": multiplies EXPERIENCE.scroll.maxSpeed while a
+// scene is active, so content scenes feel slightly heavier (readers get time to
+// land on the copy) and transition scenes feel slightly lighter. The progress
+// driver EASES between these across scene boundaries (via the same segment blend
+// as the shapes/camera), so the change in feel is smooth — it never snaps.
+//   < 1 = heavier / slower   ·   1 = neutral   ·   > 1 = lighter / faster
+// Keep the spread subtle; tune all values here.
+export const SCROLL_RESISTANCE: Record<SceneId, number> = {
+  sphere: 0.7, // content — dwell on the hero copy
+  funnel: 1.15, // transition
+  helix: 0.7, // content — dwell on the stat cards
+  starfield: 1.15, // transition
+  terrain: 0.7, // content
+  well: 1.15, // transition
+  flash: 1.15, // transition
+  orbital: 0.7, // content — dwell on the finale copy
+};
+
 // Convenience lookups.
 export const SCENE_BY_ID = Object.fromEntries(
   SCENES.map((s) => [s.id, s]),
