@@ -130,40 +130,51 @@ function CopyBlock({ scene }: { scene: SceneDef }) {
   );
 }
 
-// Funnel scene: three flat overlay labels in a stair-step from upper-right down
-// to lower-center, hugging the funnel's converging shape. Opacity / rise / drift
-// are driven per frame in handleFrame (keys `funnel-0..2`); positions here.
-const FUNNEL_POS = [
-  { top: "16%", left: "58%" }, // Instant Adjudication (upper-right)
-  { top: "42%", left: "49%" }, // Forensic Papertrail (middle)
-  { top: "67%", left: "40%" }, // Effortless Caseload (lower-center)
-];
-
+// Funnel scene: three flat overlay labels stacked as a centered vertical list in
+// the thin, sparse UPPER portion of the funnel (never the dense lower part). Each
+// line's opacity / rise (reveal) and the whole stack's horizontal drift are
+// driven per frame in handleFrame (keys `funnel-0..2`). A feathered radial scrim
+// + text-shadow keep them legible even over the brightest particles.
 function FunnelLabelsOverlay({
   blockRefs,
 }: {
   blockRefs: MutableRefObject<Record<string, HTMLDivElement | null>>;
 }) {
   return (
-    <>
+    <div className="absolute left-1/2 top-[15%] flex -translate-x-1/2 flex-col items-center gap-4 text-center">
       {FUNNEL_LABELS.map((label, i) => (
         <div
           key={label.text}
           ref={(el) => {
             blockRefs.current[`funnel-${i}`] = el;
           }}
-          className="absolute will-change-[opacity,transform]"
-          style={{ top: FUNNEL_POS[i].top, left: FUNNEL_POS[i].left, opacity: 0 }}
+          className="relative will-change-[opacity,transform]"
+          style={{ opacity: 0 }}
         >
+          {/* Soft feathered dark backing — no visible box, just a legibility halo. */}
+          <div
+            aria-hidden
+            className="pointer-events-none absolute left-1/2 top-1/2 -z-10 -translate-x-1/2 -translate-y-1/2"
+            style={{
+              width: "150%",
+              height: "300%",
+              background:
+                "radial-gradient(ellipse at center, rgba(4,6,12,0.55) 0%, rgba(4,6,12,0.3) 42%, rgba(4,6,12,0) 72%)",
+            }}
+          />
           <span
-            className="font-display text-base font-medium tracking-tight text-white/90 sm:text-lg"
-            style={{ textShadow: "0 2px 24px rgba(4,6,12,0.9)" }}
+            className="font-display text-base font-medium tracking-tight sm:text-lg"
+            style={{
+              color: "#f4f7fb",
+              textShadow:
+                "0 1px 10px rgba(4,6,12,0.95), 0 0 24px rgba(4,6,12,0.7)",
+            }}
           >
             {label.text}
           </span>
         </div>
       ))}
-    </>
+    </div>
   );
 }
 

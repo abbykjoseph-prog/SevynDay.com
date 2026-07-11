@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { ScrollControls, useScroll } from "@react-three/drei";
-import { EXPERIENCE, FUNNEL_LABELS, SCENES } from "@/config/experience";
+import { EXPERIENCE, FUNNEL_DRIFT, FUNNEL_LABELS, SCENES } from "@/config/experience";
 import {
   easeOutCubic,
   pulse,
@@ -27,16 +27,16 @@ type ExperienceProps = { isMobile: boolean; reducedMotion: boolean };
 function FrameBridge({
   onFrame,
 }: {
-  onFrame: (p: number, intro: number, time: number) => void;
+  onFrame: (p: number, intro: number) => void;
 }) {
   const progress = useExperienceProgress();
   const introT = useRef(0);
-  const time = useRef(0);
   useFrame((_, delta) => {
-    const dt = Math.min(delta, 0.05);
-    introT.current = Math.min(introT.current + dt / EXPERIENCE.intro.seconds, 1);
-    time.current += dt; // frame-accumulated seconds, for the funnel labels' drift
-    onFrame(progress.current, easeOutCubic(introT.current), time.current);
+    introT.current = Math.min(
+      introT.current + Math.min(delta, 0.05) / EXPERIENCE.intro.seconds,
+      1,
+    );
+    onFrame(progress.current, easeOutCubic(introT.current));
   });
   return null;
 }
@@ -106,7 +106,7 @@ export function Experience({ isMobile, reducedMotion }: ExperienceProps) {
   }, []);
 
   const handleFrame = useCallback(
-    (p: number, intro: number, time: number) => {
+    (p: number, intro: number) => {
       // heroIntro eases 0→1 once on load; forced to 1 when the intro is disabled.
       const heroIntro = introEnabled ? intro : 1;
 
@@ -142,21 +142,21 @@ export function Experience({ isMobile, reducedMotion }: ExperienceProps) {
       }
 
       // Funnel scene: reveal the three flat labels SEQUENTIALLY by scroll (each
-      // fully in at its config `reveal` p), fading + rising ~12px, plus a very
-      // subtle continuous drift so they feel alive (translate only — no rotate).
-      // All fade out together as the exit transition begins (~0.175–0.215).
-      const funnelOut = 1 - range01(p, 0.175, 0.215);
+      // fully in at its config `reveal` p), fading + rising ~12px. The whole
+      // centered stack drifts gently left → right across the scene (translate
+      // only — no rotation/3D). All fade out together as the exit begins.
+      const funnelOut = smoothstep(1 - range01(p, 0.175, 0.215));
+      const driftX =
+        FUNNEL_DRIFT.startX + range01(p, 0.14, 0.215) * FUNNEL_DRIFT.distance;
       for (let i = 0; i < FUNNEL_LABELS.length; i++) {
         const el = overlayRefs.current[`funnel-${i}`];
         if (!el) continue;
-        const reveal = FUNNEL_LABELS[i].reveal;
-        const fadeIn = smoothstep(range01(p, reveal - 0.02, reveal));
-        const op = Math.min(fadeIn, smoothstep(funnelOut));
+        const fadeIn = smoothstep(
+          range01(p, FUNNEL_LABELS[i].reveal - 0.02, FUNNEL_LABELS[i].reveal),
+        );
+        el.style.opacity = String(Math.min(fadeIn, funnelOut));
         const rise = (1 - fadeIn) * 12; // soft upward rise as it comes in
-        const driftX = Math.sin(time * 0.6 + i * 2.1) * 4;
-        const driftY = Math.cos(time * 0.5 + i * 2.1) * 3;
-        el.style.opacity = String(op);
-        el.style.transform = `translate(${driftX}px, ${rise + driftY}px)`;
+        el.style.transform = `translate(${driftX}px, ${rise}px)`;
       }
 
       // Starfield scene: the centered statement fades in as the scene enters and

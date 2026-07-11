@@ -240,6 +240,10 @@ export const FUNNEL_LABELS: { text: string; reveal: number }[] = [
   { text: "Forensic Papertrail", reveal: 0.165 },
   { text: "Effortless Caseload", reveal: 0.17 },
 ];
+
+// The centered funnel-label stack starts at `startX` px (slightly left of center)
+// and drifts `distance` px to the right across the scene. Tune the feel here.
+export const FUNNEL_DRIFT = { startX: -32, distance: 64 };
 // Starfield: one large, glowing, centered statement that fades in/out with the
 // scene.
 export const STARFIELD_STATEMENT =
