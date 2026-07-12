@@ -44,42 +44,55 @@ type Phase = "scrub" | "outro" | "released";
 const STAGE_TARGETS = PROGRESS_STAGES.map((s) => s.at);
 const N_STAGES = STAGE_TARGETS.length;
 
+type SnapSegment = { to: number; dur: number }; // dur in seconds
+
 type SnapState = {
   value: number; // current progress 0..1 (mirrored into progress.current)
   stage: number; // settled / target stage index
-  from: number;
-  to: number;
-  t: number; // tween param 0..1
-  dur: number; // tween duration (seconds)
+  segments: SnapSegment[]; // one (normal step) or several (choreographed climax)
+  segIndex: number; // which segment is currently playing
+  segFrom: number; // value at the start of the current segment
+  t: number; // tween param 0..1 within the current segment
   animating: boolean;
   lastArrive: number; // performance.now() of last arrival (input cooldown)
 };
 
-// Per-transition duration derived from the progress span it covers, clamped —
-// so the long Wave Terrain → Orbital climax naturally takes the longest.
+// Span-scaled per-transition duration (normal steps, reverse climax, multi-stage
+// dot jumps), clamped. Long enough that the morph is clearly watchable.
 function snapDurationSec(span: number): number {
-  const { baseMs, minMs, maxMs, refSpan } = EXPERIENCE.snap;
+  const { transitionMs, minMs, maxMs, refSpan } = EXPERIENCE.snap;
   const ms = Math.min(
     maxMs,
-    Math.max(minMs, (baseMs * Math.abs(span)) / refSpan),
+    Math.max(minMs, (transitionMs * Math.abs(span)) / refSpan),
   );
   return ms / 1000;
 }
 
-// Advances the active snap tween each frame and mirrors it into the shared
-// progress ref. Mounted first inside ProgressProvider so scene consumers read
-// the fresh value the same frame.
+// Advances the active snap tween each frame — segment by segment, each eased —
+// and mirrors it into the shared progress ref. Mounted first inside
+// ProgressProvider so scene consumers read the fresh value the same frame.
 function SnapDriver({ snap }: { snap: MutableRefObject<SnapState> }) {
   const progress = useExperienceProgress();
   useFrame((_, delta) => {
     const s = snap.current;
     if (s.animating) {
-      s.t = Math.min(s.t + Math.min(delta, 0.05) / s.dur, 1);
-      s.value = lerp(s.from, s.to, easeInOutCubic(s.t));
-      if (s.t >= 1) {
-        s.value = s.to;
+      const seg = s.segments[s.segIndex];
+      if (seg) {
+        s.t = Math.min(s.t + Math.min(delta, 0.05) / seg.dur, 1);
+        s.value = lerp(s.segFrom, seg.to, easeInOutCubic(s.t));
+        if (s.t >= 1) {
+          s.value = seg.to;
+          s.segIndex += 1;
+          if (s.segIndex >= s.segments.length) {
+            s.animating = false;
+            s.lastArrive = performance.now();
+          } else {
+            s.segFrom = seg.to; // next beat starts where this one ended
+            s.t = 0;
+          }
+        }
+      } else {
         s.animating = false;
-        s.lastArrive = performance.now();
       }
     }
     progress.current = s.value;
@@ -186,10 +199,10 @@ export function Experience({ isMobile, reducedMotion }: ExperienceProps) {
   const snap = useRef<SnapState>({
     value: STAGE_TARGETS[initialStage],
     stage: initialStage,
-    from: STAGE_TARGETS[initialStage],
-    to: STAGE_TARGETS[initialStage],
+    segments: [],
+    segIndex: 0,
+    segFrom: STAGE_TARGETS[initialStage],
     t: 1,
-    dur: 1,
     animating: false,
     lastArrive: 0,
   });
@@ -205,14 +218,26 @@ export function Experience({ isMobile, reducedMotion }: ExperienceProps) {
   }, []);
 
   // Tween progress to a stage target (used by scroll gestures + dot clicks).
+  // A forward move that ENDS on Orbital plays the choreographed climax beats;
+  // everything else is a single span-scaled eased segment.
   const goToStage = useCallback((index: number) => {
     const s = snap.current;
     const target = Math.max(0, Math.min(N_STAGES - 1, index));
     if (target === s.stage && !s.animating) return;
-    s.from = s.value;
-    s.to = STAGE_TARGETS[target];
+    const toP = STAGE_TARGETS[target];
+    if (target === N_STAGES - 1 && target > s.stage) {
+      // Wave Terrain → Orbital climax: gather/form → string → flare → expand.
+      s.segments = EXPERIENCE.snap.climax.map((b) => ({
+        to: b.p,
+        dur: b.ms / 1000,
+      }));
+      s.segments[s.segments.length - 1].to = toP; // land exactly on Orbital
+    } else {
+      s.segments = [{ to: toP, dur: snapDurationSec(toP - s.value) }];
+    }
+    s.segIndex = 0;
+    s.segFrom = s.value;
     s.t = 0;
-    s.dur = snapDurationSec(s.to - s.from);
     s.animating = true;
     s.stage = target;
   }, []);
@@ -257,8 +282,8 @@ export function Experience({ isMobile, reducedMotion }: ExperienceProps) {
     const s = snap.current;
     s.value = STAGE_TARGETS[N_STAGES - 1];
     s.stage = N_STAGES - 1;
-    s.from = s.value;
-    s.to = s.value;
+    s.segments = [];
+    s.segIndex = 0;
     s.t = 1;
     s.animating = false;
     window.scrollTo(0, 0);
@@ -555,13 +580,14 @@ export function Experience({ isMobile, reducedMotion }: ExperienceProps) {
         </>
       )}
 
-      {/* Scroll-progress dots — present throughout (clickable to jump between
-          stages / replay); smaller + dimmer once handed off to normal scroll. */}
+      {/* Scroll-progress dots — scoped to the ANIMATION only (scrub). They fade
+          out on the finale handoff and never float over the normal content
+          sections below (Features / Pricing / Footer). */}
       <ProgressDots
         blockRefs={overlayRefs}
         isMobile={isMobile}
-        visible
-        dimmed={phase === "released"}
+        visible={phase === "scrub"}
+        dimmed={false}
         onStageClick={onStageClick}
       />
 

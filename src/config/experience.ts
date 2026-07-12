@@ -101,13 +101,34 @@ export const EXPERIENCE = {
    *  trackpad momentum so one flick = one stage). Thresholds normalize wheel vs
    *  swipe input. Snap targets are the stage anchors in PROGRESS_STAGES. */
   snap: {
-    baseMs: 1100,
-    minMs: 620,
-    maxMs: 2800,
+    /** default per-stage transition duration — long enough that the morph
+     *  between shapes is a clearly watchable animation, not a blink. */
+    transitionMs: 2000,
+    /** clamp for span-scaled durations (reverse climax / multi-stage dot jumps):
+     *  duration = transitionMs * |span| / refSpan, clamped to [minMs, maxMs]. */
+    minMs: 1200,
+    maxMs: 3400,
     refSpan: 0.135,
-    lockMs: 260,
+    /** input cooldown after landing (with the transition lock: one flick = one
+     *  stage). */
+    lockMs: 320,
     wheelThreshold: 6,
     swipeThreshold: 44,
+    /** Choreographed Wave Terrain → Orbital CLIMAX (the showpiece). A sequence of
+     *  eased sub-beats: reach progress `p` over `ms`. Spaced so each distinct beat
+     *  is visible and paced (~3.7s total, self-playing, not scrubbable):
+     *   (1) gather / FORM     — terrain dissolves into the gravity well
+     *   (2) STRING / streak   — spiral arms implode
+     *   (3) FLARE             — the white flash blooms
+     *   (4) orbit EXPANDS     — outward, settling with SEVYNDAY
+     *  Tune each beat's target `p` and duration `ms` here. (The last `p` is
+     *  overridden to the exact Orbital snap target at runtime.) */
+    climax: [
+      { p: 0.68, ms: 950 },
+      { p: 0.79, ms: 850 },
+      { p: 0.815, ms: 750 },
+      { p: 0.95, ms: 1150 },
+    ],
   },
   background: "#04060c",
   /** device-pixel-ratio clamp for the Canvas */
