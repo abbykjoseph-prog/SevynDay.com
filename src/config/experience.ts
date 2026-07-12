@@ -115,7 +115,7 @@ export const EXPERIENCE = {
      *  `null` → use the span-scaled default (`transitionMs`). Applies to a single
      *  adjacent-stage step in EITHER direction; the forward climax (gap 4 going
      *  up) uses `climax` instead. Nudge these two freely to retune the pacing. */
-    overrideMs: [null, null, 3000, 3000, null] as (number | null)[],
+    overrideMs: [null, null, 3000, 3600, null] as (number | null)[],
     /** clamp for span-scaled durations (reverse climax / multi-stage dot jumps):
      *  duration = transitionMs * |span| / refSpan, clamped to [minMs, maxMs]. */
     minMs: 1200,
