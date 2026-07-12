@@ -76,23 +76,27 @@ function snapDurationSec(span: number): number {
   return ms / 1000;
 }
 
-// Monotone cubic-Hermite tangents for the climax keyframes: 0 at the endpoints
-// (so the whole run eases IN at the start and OUT at the end) and the harmonic
-// mean of the neighbouring secants at each interior keyframe — which guarantees
-// a monotone, CONTINUOUS-velocity curve, i.e. no dwell/freeze between sub-beats.
-function monotoneTangents(ts: number[], ps: number[]): number[] {
+// Clamp hand-authored climax tangents (the config `v` velocities) into the
+// Fritsch–Carlson monotone-safe region: 0 ≤ m_i ≤ 3·min(adjacent secants). This
+// lets us author a dramatic slow→fast→slow velocity profile with explicit per-
+// keyframe speeds while guaranteeing the curve can never overshoot / reverse,
+// even if a `v` is mis-tuned. Shared tangents keep velocity C1-continuous across
+// beats (no dwell/freeze), so only the SPEED varies — the motion stays one piece.
+function clampTangentsMonotone(
+  ts: number[],
+  ps: number[],
+  m: number[],
+): number[] {
   const n = ts.length;
-  const d: number[] = [];
+  const s: number[] = [];
   for (let i = 0; i < n - 1; i++) {
-    d.push((ps[i + 1] - ps[i]) / (ts[i + 1] - ts[i]));
+    s.push((ps[i + 1] - ps[i]) / (ts[i + 1] - ts[i]));
   }
-  const m = new Array<number>(n).fill(0);
-  for (let i = 1; i < n - 1; i++) {
-    const a = d[i - 1];
-    const b = d[i];
-    m[i] = a > 0 && b > 0 ? 2 / (1 / a + 1 / b) : 0;
-  }
-  return m;
+  return m.map((v, i) => {
+    const left = i > 0 ? s[i - 1] : Infinity;
+    const right = i < n - 1 ? s[i] : Infinity;
+    return Math.max(0, Math.min(v, 3 * Math.min(left, right)));
+  });
 }
 
 // Evaluate the climax curve at s.kElapsed seconds (cubic Hermite in the segment).
@@ -277,23 +281,27 @@ export function Experience({ isMobile, reducedMotion }: ExperienceProps) {
     if (target === s.stage && !s.animating) return;
     const toP = STAGE_TARGETS[target];
     if (target === N_STAGES - 1 && target > s.stage) {
-      // Wave Terrain → Orbital climax: gather/form → string → flare → expand,
-      // played as ONE continuous monotone-Hermite curve through the sub-beat
-      // checkpoints (velocity stays continuous across beats — no dwell/freeze,
-      // and the flash is traversed quickly so it never holds on full white).
+      // Wave Terrain → Orbital climax: SLOW form/shrink → FAST flash+burst →
+      // hard DECEL → SLOW cinematic orbital opening. Played as ONE continuous
+      // cubic-Hermite curve whose tangents are the config `v` velocities, so the
+      // speed varies dramatically while velocity stays C1-continuous across every
+      // beat (no dwell/freeze, no hard cut). The start keyframe gets v=0 (gentle
+      // ease-in); the last config `v` is 0 (heavy ease-OUT settle).
       const kt = [0];
       const kp = [s.value];
+      const km = [0];
       let acc = 0;
       for (const b of EXPERIENCE.snap.climax) {
         acc += b.ms / 1000;
         kt.push(acc);
         kp.push(b.p);
+        km.push(b.v);
       }
       kp[kp.length - 1] = toP; // land exactly on Orbital
       s.climax = true;
       s.kt = kt;
       s.kp = kp;
-      s.km = monotoneTangents(kt, kp);
+      s.km = clampTangentsMonotone(kt, kp, km);
       s.kElapsed = 0;
       s.kDur = acc;
     } else {

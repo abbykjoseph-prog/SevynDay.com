@@ -126,24 +126,30 @@ export const EXPERIENCE = {
     lockMs: 320,
     wheelThreshold: 6,
     swipeThreshold: 44,
-    /** Choreographed Wave Terrain → Orbital CLIMAX (the showpiece). Each beat is a
-     *  checkpoint: reach progress `p` by cumulative time `ms`. At runtime these are
-     *  strung onto ONE continuous monotone-Hermite curve (see Experience.tsx) so
-     *  velocity never drops to zero between beats — the whole run flows as a single
-     *  motion (eases IN at the very start, OUT at the very end) with NO dwell/freeze
-     *  and no hold on full white. ~3.24s total, self-playing, not scrubbable:
-     *   (1) FORM   — terrain dissolves into the gravity well (slow ease-in, ~1.1s)
-     *   (2) SHRINK — well implodes, flowing straight into the flash (~0.9s)
-     *   (3) FLARE  — sweeps THROUGH the white peak fast; blooms up & releases (~0.42s)
-     *   (4) EXPAND — orbit blooms outward, eased settle with SEVYNDAY (~0.82s)
-     *  The flash range/peak live in EXPERIENCE.flash ([0.78,0.845] peak 0.808); beat
-     *  3 spans that window quickly so the peak is crossed, never parked on. Tune each
-     *  beat's `p` and `ms` here. (The last `p` snaps to the exact Orbital target.) */
+    /** Choreographed Wave Terrain → Orbital CLIMAX (the showpiece). A deliberate
+     *  SLOW → FAST → SLOW speed curve. Each beat is a checkpoint: reach progress `p`
+     *  by cumulative time `ms`, ARRIVING at that keyframe with velocity `v` (progress
+     *  units per second — this is what sets the pacing). At runtime the beats are
+     *  strung onto ONE continuous cubic-Hermite curve (see Experience.tsx): the `v`
+     *  values are the shared tangents, so velocity is C1-continuous across every beat
+     *  (no dwell/freeze/hard-cut) while the SPEED varies dramatically. The start
+     *  keyframe has v=0 (gentle ease-in) and the last has v=0 (heavy ease-OUT settle).
+     *  ~6.9s total, self-playing, not scrubbable:
+     *   (1) SLOW  — terrain pulled in, gravity well forms & slowly shrinks (~3.0s)
+     *   (2) FAST  — white flash blooms & releases + energetic burst out (~0.55s, peak v)
+     *   (2b) DECEL — sharp, smooth velocity ramp-down out of the burst (~0.65s)
+     *   (3) SLOW  — orbital ecosystem opens gently & cinematically, settles (~2.7s)
+     *  The flash range/peak live in EXPERIENCE.flash ([0.78,0.845] peak 0.808); beat 2
+     *  spans that window at high speed so the peak is crossed, never parked on. Tune
+     *  each beat's `p` (target), `ms` (duration) and `v` (arrival speed) here — bigger
+     *  `v` = faster there, smaller = slower/eased. Velocities are auto-clamped to a
+     *  monotone-safe range so a mis-tuned value can never make the curve overshoot.
+     *  (The last `p` snaps to the exact Orbital target.) */
     climax: [
-      { p: 0.67, ms: 1100 },
-      { p: 0.785, ms: 900 },
-      { p: 0.83, ms: 420 },
-      { p: 0.95, ms: 820 },
+      { p: 0.76, ms: 3000, v: 0.1 },
+      { p: 0.85, ms: 550, v: 0.155 },
+      { p: 0.895, ms: 650, v: 0.035 },
+      { p: 0.95, ms: 2700, v: 0 },
     ],
   },
   background: "#04060c",
