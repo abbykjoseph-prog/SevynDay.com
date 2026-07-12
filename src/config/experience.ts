@@ -102,8 +102,20 @@ export const EXPERIENCE = {
    *  swipe input. Snap targets are the stage anchors in PROGRESS_STAGES. */
   snap: {
     /** default per-stage transition duration — long enough that the morph
-     *  between shapes is a clearly watchable animation, not a blink. */
+     *  between shapes is a clearly watchable animation, not a blink. Used by any
+     *  transition without an explicit override below. */
     transitionMs: 2000,
+    /** Per-transition duration OVERRIDES in ms, indexed by the gap between
+     *  adjacent stages:
+     *    [0] Hero ↔ Funnel
+     *    [1] Funnel ↔ Helix
+     *    [2] Helix ↔ Starfield
+     *    [3] Starfield ↔ Wave Terrain
+     *    [4] Wave Terrain ↔ Orbital
+     *  `null` → use the span-scaled default (`transitionMs`). Applies to a single
+     *  adjacent-stage step in EITHER direction; the forward climax (gap 4 going
+     *  up) uses `climax` instead. Nudge these two freely to retune the pacing. */
+    overrideMs: [null, null, 3000, 3000, null] as (number | null)[],
     /** clamp for span-scaled durations (reverse climax / multi-stage dot jumps):
      *  duration = transitionMs * |span| / refSpan, clamped to [minMs, maxMs]. */
     minMs: 1200,

@@ -233,7 +233,16 @@ export function Experience({ isMobile, reducedMotion }: ExperienceProps) {
       }));
       s.segments[s.segments.length - 1].to = toP; // land exactly on Orbital
     } else {
-      s.segments = [{ to: toP, dur: snapDurationSec(toP - s.value) }];
+      // Single eased segment. An adjacent-stage step may override its duration
+      // (EXPERIENCE.snap.overrideMs by gap); otherwise the span-scaled default.
+      const gap = Math.min(s.stage, target);
+      const override =
+        Math.abs(target - s.stage) === 1
+          ? EXPERIENCE.snap.overrideMs[gap]
+          : null;
+      const dur =
+        override != null ? override / 1000 : snapDurationSec(toP - s.value);
+      s.segments = [{ to: toP, dur }];
     }
     s.segIndex = 0;
     s.segFrom = s.value;
