@@ -126,20 +126,24 @@ export const EXPERIENCE = {
     lockMs: 320,
     wheelThreshold: 6,
     swipeThreshold: 44,
-    /** Choreographed Wave Terrain → Orbital CLIMAX (the showpiece). A sequence of
-     *  eased sub-beats: reach progress `p` over `ms`. Spaced so each distinct beat
-     *  is visible and paced (~3.7s total, self-playing, not scrubbable):
-     *   (1) gather / FORM     — terrain dissolves into the gravity well
-     *   (2) STRING / streak   — spiral arms implode
-     *   (3) FLARE             — the white flash blooms
-     *   (4) orbit EXPANDS     — outward, settling with SEVYNDAY
-     *  Tune each beat's target `p` and duration `ms` here. (The last `p` is
-     *  overridden to the exact Orbital snap target at runtime.) */
+    /** Choreographed Wave Terrain → Orbital CLIMAX (the showpiece). Each beat is a
+     *  checkpoint: reach progress `p` by cumulative time `ms`. At runtime these are
+     *  strung onto ONE continuous monotone-Hermite curve (see Experience.tsx) so
+     *  velocity never drops to zero between beats — the whole run flows as a single
+     *  motion (eases IN at the very start, OUT at the very end) with NO dwell/freeze
+     *  and no hold on full white. ~3.24s total, self-playing, not scrubbable:
+     *   (1) FORM   — terrain dissolves into the gravity well (slow ease-in, ~1.1s)
+     *   (2) SHRINK — well implodes, flowing straight into the flash (~0.9s)
+     *   (3) FLARE  — sweeps THROUGH the white peak fast; blooms up & releases (~0.42s)
+     *   (4) EXPAND — orbit blooms outward, eased settle with SEVYNDAY (~0.82s)
+     *  The flash range/peak live in EXPERIENCE.flash ([0.78,0.845] peak 0.808); beat
+     *  3 spans that window quickly so the peak is crossed, never parked on. Tune each
+     *  beat's `p` and `ms` here. (The last `p` snaps to the exact Orbital target.) */
     climax: [
-      { p: 0.68, ms: 950 },
-      { p: 0.79, ms: 850 },
-      { p: 0.815, ms: 750 },
-      { p: 0.95, ms: 1150 },
+      { p: 0.67, ms: 1100 },
+      { p: 0.785, ms: 900 },
+      { p: 0.83, ms: 420 },
+      { p: 0.95, ms: 820 },
     ],
   },
   background: "#04060c",

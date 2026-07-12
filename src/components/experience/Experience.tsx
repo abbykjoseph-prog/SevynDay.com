@@ -44,17 +44,25 @@ type Phase = "scrub" | "outro" | "released";
 const STAGE_TARGETS = PROGRESS_STAGES.map((s) => s.at);
 const N_STAGES = STAGE_TARGETS.length;
 
-type SnapSegment = { to: number; dur: number }; // dur in seconds
-
 type SnapState = {
   value: number; // current progress 0..1 (mirrored into progress.current)
   stage: number; // settled / target stage index
-  segments: SnapSegment[]; // one (normal step) or several (choreographed climax)
-  segIndex: number; // which segment is currently playing
-  segFrom: number; // value at the start of the current segment
-  t: number; // tween param 0..1 within the current segment
   animating: boolean;
   lastArrive: number; // performance.now() of last arrival (input cooldown)
+  // The active tween is EITHER a normal single eased segment OR the choreographed
+  // climax (a single CONTINUOUS monotone-Hermite curve through the sub-beats).
+  climax: boolean;
+  // normal single eased segment:
+  from: number;
+  to: number;
+  dur: number; // seconds
+  t: number; // 0..1
+  // climax keyframed path (continuous velocity, no per-beat dwell):
+  kt: number[]; // cumulative keyframe times (s)
+  kp: number[]; // keyframe progress values
+  km: number[]; // keyframe tangents dp/dt (0 at the ends → ease-in / ease-out)
+  kElapsed: number;
+  kDur: number;
 };
 
 // Span-scaled per-transition duration (normal steps, reverse climax, multi-stage
@@ -68,31 +76,67 @@ function snapDurationSec(span: number): number {
   return ms / 1000;
 }
 
-// Advances the active snap tween each frame — segment by segment, each eased —
-// and mirrors it into the shared progress ref. Mounted first inside
+// Monotone cubic-Hermite tangents for the climax keyframes: 0 at the endpoints
+// (so the whole run eases IN at the start and OUT at the end) and the harmonic
+// mean of the neighbouring secants at each interior keyframe — which guarantees
+// a monotone, CONTINUOUS-velocity curve, i.e. no dwell/freeze between sub-beats.
+function monotoneTangents(ts: number[], ps: number[]): number[] {
+  const n = ts.length;
+  const d: number[] = [];
+  for (let i = 0; i < n - 1; i++) {
+    d.push((ps[i + 1] - ps[i]) / (ts[i + 1] - ts[i]));
+  }
+  const m = new Array<number>(n).fill(0);
+  for (let i = 1; i < n - 1; i++) {
+    const a = d[i - 1];
+    const b = d[i];
+    m[i] = a > 0 && b > 0 ? 2 / (1 / a + 1 / b) : 0;
+  }
+  return m;
+}
+
+// Evaluate the climax curve at s.kElapsed seconds (cubic Hermite in the segment).
+function climaxValue(s: SnapState): number {
+  const { kt, kp, km, kElapsed } = s;
+  let i = 0;
+  while (i < kt.length - 2 && kElapsed > kt[i + 1]) i++;
+  const h = kt[i + 1] - kt[i];
+  const u = h > 0 ? Math.min(1, Math.max(0, (kElapsed - kt[i]) / h)) : 1;
+  const u2 = u * u;
+  const u3 = u2 * u;
+  const h00 = 2 * u3 - 3 * u2 + 1;
+  const h10 = u3 - 2 * u2 + u;
+  const h01 = -2 * u3 + 3 * u2;
+  const h11 = u3 - u2;
+  return h00 * kp[i] + h10 * h * km[i] + h01 * kp[i + 1] + h11 * h * km[i + 1];
+}
+
+// Advances the active snap tween each frame and mirrors it into the shared
+// progress ref. The climax is ONE continuous monotone-Hermite curve (no per-beat
+// freeze); normal steps are a single eased segment. Mounted first inside
 // ProgressProvider so scene consumers read the fresh value the same frame.
 function SnapDriver({ snap }: { snap: MutableRefObject<SnapState> }) {
   const progress = useExperienceProgress();
   useFrame((_, delta) => {
     const s = snap.current;
     if (s.animating) {
-      const seg = s.segments[s.segIndex];
-      if (seg) {
-        s.t = Math.min(s.t + Math.min(delta, 0.05) / seg.dur, 1);
-        s.value = lerp(s.segFrom, seg.to, easeInOutCubic(s.t));
-        if (s.t >= 1) {
-          s.value = seg.to;
-          s.segIndex += 1;
-          if (s.segIndex >= s.segments.length) {
-            s.animating = false;
-            s.lastArrive = performance.now();
-          } else {
-            s.segFrom = seg.to; // next beat starts where this one ended
-            s.t = 0;
-          }
+      const dt = Math.min(delta, 0.05);
+      if (s.climax) {
+        s.kElapsed = Math.min(s.kElapsed + dt, s.kDur);
+        s.value = climaxValue(s);
+        if (s.kElapsed >= s.kDur) {
+          s.value = s.kp[s.kp.length - 1];
+          s.animating = false;
+          s.lastArrive = performance.now();
         }
       } else {
-        s.animating = false;
+        s.t = Math.min(s.t + dt / s.dur, 1);
+        s.value = lerp(s.from, s.to, easeInOutCubic(s.t));
+        if (s.t >= 1) {
+          s.value = s.to;
+          s.animating = false;
+          s.lastArrive = performance.now();
+        }
       }
     }
     progress.current = s.value;
@@ -133,6 +177,7 @@ function DebugBridge({ snap }: { snap: MutableRefObject<SnapState> }) {
         const s = snap.current;
         s.value = f;
         s.animating = false;
+        s.climax = false;
         s.t = 1;
         // Nearest stage (for the dots / logic).
         let nearest = 0;
@@ -199,12 +244,18 @@ export function Experience({ isMobile, reducedMotion }: ExperienceProps) {
   const snap = useRef<SnapState>({
     value: STAGE_TARGETS[initialStage],
     stage: initialStage,
-    segments: [],
-    segIndex: 0,
-    segFrom: STAGE_TARGETS[initialStage],
-    t: 1,
     animating: false,
     lastArrive: 0,
+    climax: false,
+    from: STAGE_TARGETS[initialStage],
+    to: STAGE_TARGETS[initialStage],
+    dur: 1,
+    t: 1,
+    kt: [],
+    kp: [],
+    km: [],
+    kElapsed: 0,
+    kDur: 1,
   });
 
   // Input is locked while a transition plays, plus a short cooldown after landing
@@ -226,12 +277,25 @@ export function Experience({ isMobile, reducedMotion }: ExperienceProps) {
     if (target === s.stage && !s.animating) return;
     const toP = STAGE_TARGETS[target];
     if (target === N_STAGES - 1 && target > s.stage) {
-      // Wave Terrain → Orbital climax: gather/form → string → flare → expand.
-      s.segments = EXPERIENCE.snap.climax.map((b) => ({
-        to: b.p,
-        dur: b.ms / 1000,
-      }));
-      s.segments[s.segments.length - 1].to = toP; // land exactly on Orbital
+      // Wave Terrain → Orbital climax: gather/form → string → flare → expand,
+      // played as ONE continuous monotone-Hermite curve through the sub-beat
+      // checkpoints (velocity stays continuous across beats — no dwell/freeze,
+      // and the flash is traversed quickly so it never holds on full white).
+      const kt = [0];
+      const kp = [s.value];
+      let acc = 0;
+      for (const b of EXPERIENCE.snap.climax) {
+        acc += b.ms / 1000;
+        kt.push(acc);
+        kp.push(b.p);
+      }
+      kp[kp.length - 1] = toP; // land exactly on Orbital
+      s.climax = true;
+      s.kt = kt;
+      s.kp = kp;
+      s.km = monotoneTangents(kt, kp);
+      s.kElapsed = 0;
+      s.kDur = acc;
     } else {
       // Single eased segment. An adjacent-stage step may override its duration
       // (EXPERIENCE.snap.overrideMs by gap); otherwise the span-scaled default.
@@ -240,13 +304,13 @@ export function Experience({ isMobile, reducedMotion }: ExperienceProps) {
         Math.abs(target - s.stage) === 1
           ? EXPERIENCE.snap.overrideMs[gap]
           : null;
-      const dur =
+      s.climax = false;
+      s.from = s.value;
+      s.to = toP;
+      s.dur =
         override != null ? override / 1000 : snapDurationSec(toP - s.value);
-      s.segments = [{ to: toP, dur }];
+      s.t = 0;
     }
-    s.segIndex = 0;
-    s.segFrom = s.value;
-    s.t = 0;
     s.animating = true;
     s.stage = target;
   }, []);
@@ -291,8 +355,7 @@ export function Experience({ isMobile, reducedMotion }: ExperienceProps) {
     const s = snap.current;
     s.value = STAGE_TARGETS[N_STAGES - 1];
     s.stage = N_STAGES - 1;
-    s.segments = [];
-    s.segIndex = 0;
+    s.climax = false;
     s.t = 1;
     s.animating = false;
     window.scrollTo(0, 0);
