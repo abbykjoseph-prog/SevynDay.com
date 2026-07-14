@@ -31,16 +31,23 @@ export function useExperienceEnv() {
   const reducedMotion = usePrefersReducedMotion();
   const isMobile = useIsMobile();
   const [ready, setReady] = useState(false);
-  // `?reduced` forces the static fallback (QA + a manual escape hatch). Read
-  // after mount so it stays SSR-safe.
+  // URL escape hatches (read after mount so they stay SSR-safe):
+  //   ?reduced — force the static fallback (QA).
+  //   ?motion  — force the full animated experience even when the OS asks for
+  //              reduced motion (a shareable override for client demos, where we
+  //              can't control the visitor's accessibility settings).
+  // Explicit ?motion wins over both the OS setting and ?reduced.
   const [forceReduced, setForceReduced] = useState(false);
+  const [forceMotion, setForceMotion] = useState(false);
   useEffect(() => {
     setReady(true);
-    setForceReduced(/reduced/.test(window.location.search));
+    const params = new URLSearchParams(window.location.search);
+    setForceReduced(params.has("reduced"));
+    setForceMotion(params.has("motion"));
   }, []);
   return {
     ready,
-    reducedMotion: reducedMotion || forceReduced,
+    reducedMotion: forceMotion ? false : reducedMotion || forceReduced,
     isMobile,
   };
 }
